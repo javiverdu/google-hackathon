@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import base64
+import hashlib
 import io
 import zipfile
 from pathlib import Path
@@ -351,6 +351,16 @@ st.markdown(
         padding: 12px 16px;
       }
 
+      /* streamlit-pdf v1 reports no height on newer Streamlit, so force the
+         viewer iframe instead of letting it collapse to 0px. */
+      iframe[title="streamlit_pdf.pdf_viewer"] {
+        height: 500px !important;
+        width: 100% !important;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--white);
+      }
+
       hr, [data-testid="stDivider"] {border-color: var(--border);}
       a {color: var(--cobalt);}
       code {background: var(--frost); border-radius: 6px; padding: 1px 5px;}
@@ -470,15 +480,17 @@ def _visible_files(folder) -> list:
     ]
 
 
-def render_attachment_preview(name: str, data: bytes) -> None:
+def render_attachment_preview(name: str, data: bytes, key: str | None = None) -> None:
     """Reusable inline preview for a PDF/image, used by Inbox and Review tabs."""
     suffix = Path(name).suffix.lower()
     if suffix == ".pdf":
-        b64 = base64.b64encode(data).decode()
-        st.markdown(
-            f'<embed src="data:application/pdf;base64,{b64}" '
-            'width="100%" height="500" type="application/pdf">',
-            unsafe_allow_html=True,
+        # st.pdf uses a real component (streamlit-pdf). A base64 <embed> works
+        # only intermittently: Chromium refuses large data URIs and keeps a
+        # stale viewer after the bytes change (e.g. a freshly signed PDF).
+        st.pdf(
+            data,
+            height=500,
+            key=f"pdf_{key or name}_{hashlib.sha1(data).hexdigest()[:10]}",
         )
     elif suffix in (".jpg", ".jpeg", ".png", ".webp"):
         st.image(data, width="stretch")
@@ -634,7 +646,11 @@ with inbox_tab:
                             elif any(att_name.split(".")[0] in s for s in entry.get("saved") or []):
                                 tag = " · ✅ saved"
                         with st.expander(f"📎 {att_name}{tag}"):
-                            render_attachment_preview(att_name, attachment["data"])
+                            render_attachment_preview(
+                                att_name,
+                                attachment["data"],
+                                key=f"{meta['filename']}_{att_name}",
+                            )
                             if tag.endswith("needs review"):
                                 st.caption("Fix this in the 🔍 Review tab to approve or discard it.")
 
@@ -716,6 +732,19 @@ with review_tab:
         preview_col, form_col = st.columns([3, 2])
 
         with preview_col:
+            signed_position = st.session_state.pop(f"sig_done_{selected.name}", None)
+            if signed_position:
+                st.success(
+                    f"Signature stamped on the last page ({signed_position.lower()}). "
+                    "Scroll inside the preview to the bottom to see it."
+                )
+                st.download_button(
+                    "⬇ Download signed PDF",
+                    data=selected.read_bytes(),
+                    file_name=selected.name,
+                    key=f"sig_download_{selected.name}",
+                )
+
             if sidecar.get("reason"):
                 st.warning(f"Why it was flagged: {sidecar['reason']}")
             if sidecar.get("source_email"):
@@ -760,19 +789,24 @@ with review_tab:
                             signature_png = uploaded.getvalue()
                             st.image(signature_png, caption="Preview")
 
+                    # Keep the button clickable even if Streamlit has not sent
+                    # the text input value yet (it commits on blur/Enter). The
+                    # click blurs the field, so the value arrives in this run.
                     if st.button(
                         "Stamp signature onto this document",
-                        disabled=signature_png is None,
                         key=f"sig_stamp_{selected.name}",
                     ):
-                        signed_bytes = stamp_signature_on_pdf(
-                            selected.read_bytes(),
-                            signature_png,
-                            position=position.lower().replace(" ", "-"),
-                        )
-                        selected.write_bytes(signed_bytes)
-                        st.success("Signed. The preview above now shows the signed copy.")
-                        st.rerun()
+                        if signature_png is None:
+                            st.warning("Type a name or upload a signature image first.")
+                        else:
+                            signed_bytes = stamp_signature_on_pdf(
+                                selected.read_bytes(),
+                                signature_png,
+                                position=position.lower().replace(" ", "-"),
+                            )
+                            selected.write_bytes(signed_bytes)
+                            st.session_state[f"sig_done_{selected.name}"] = position
+                            st.rerun()
 
         with form_col:
             with st.form(key=f"review_form_{selected.name}"):

@@ -3,7 +3,8 @@ google-genai>=1.0
 pydantic>=2.7
 python-dotenv>=1.0
 openpyxl>=3.1
-streamlit>=1.36
+streamlit>=1.36,<1.67
 pillow>=10.1
 pypdf>=4.0
 reportlab>=4.0
+streamlit-pdf==1.0.8
