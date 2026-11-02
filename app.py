@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import os
 import zipfile
 
 import streamlit as st
@@ -54,9 +53,13 @@ with st.sidebar:
     st.caption(f"Model: `{config.GEMINI_MODEL}`")
     st.caption("Fallbacks: " + ", ".join(f"`{m}`" for m in config.GEMINI_FALLBACK_MODELS))
     st.caption(f"Data folder: `{config.DATA_DIR}`")
-    if not (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")):
-        st.warning("No GOOGLE_API_KEY detected. Add it in .env or Streamlit secrets.")
-
+    if config.has_api_key():
+        st.caption("Gemini key loaded")
+    else:
+        st.warning(
+            'No GOOGLE_API_KEY detected. Add GOOGLE_API_KEY = "..." to Streamlit secrets, '
+            "or to .env for local runs."
+        )
 def _visible_files(folder) -> list:
     """Real documents only: no .gitkeep, no review reason sidecars."""
     if not folder.exists():

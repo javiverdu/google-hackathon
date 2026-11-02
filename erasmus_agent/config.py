@@ -35,18 +35,36 @@ for _folder in (DATA_DIR, INBOX_DIR, OUT_DIR, REVIEW_DIR):
     _folder.mkdir(parents=True, exist_ok=True)
 
 
+def _streamlit_secret(name: str) -> str | None:
+    try:  # Streamlit Community Cloud exposes secrets this way
+        import streamlit as st
+
+        return st.secrets.get(name)  # type: ignore[union-attr]
+    except Exception:
+        return None
+
+
+def has_api_key() -> bool:
+    """True if the key exists in env or Streamlit secrets. Never raises."""
+    return bool(
+        os.getenv("GOOGLE_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or _streamlit_secret("GOOGLE_API_KEY")
+        or _streamlit_secret("GEMINI_API_KEY")
+    )
+
+
 def api_key() -> str:
     """Return the Gemini key from env or Streamlit secrets."""
-    key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-    if not key:
-        try:  # Streamlit Community Cloud exposes secrets this way
-            import streamlit as st
-
-            key = st.secrets.get("GOOGLE_API_KEY")  # type: ignore[union-attr]
-        except Exception:
-            key = None
+    key = (
+        os.getenv("GOOGLE_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or _streamlit_secret("GOOGLE_API_KEY")
+        or _streamlit_secret("GEMINI_API_KEY")
+    )
     if not key:
         raise RuntimeError(
-            "GOOGLE_API_KEY missing. Copy .env.example to .env and add your AI Studio key."
+            "GOOGLE_API_KEY missing. Copy .env.example to .env and add your AI Studio key, "
+            'or add GOOGLE_API_KEY = "..." in Streamlit secrets.'
         )
     return key
