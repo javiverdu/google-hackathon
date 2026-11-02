@@ -72,6 +72,8 @@ erasmus_agent/
     excel_writer.py         one row per student
     faq.py                  FAQ lookup
 scripts/make_sample_data.py 10 fake emails + PDFs/JPGs
+scripts/check_inbox.py      validate a folder without calling Gemini
+tests/                      offline tests + optional live Gemini tests
 data/inbox/                 input .eml files (samples committed)
 data/out/                   renamed documents (gitignored)
 data/review/                uncertain documents (gitignored)
@@ -135,7 +137,33 @@ pytest
 ruff check .
 ```
 
-Tests never call Gemini, so they run without an API key.
+57 offline tests, no key needed. They cover the ugly cases:
+
+- empty, garbage and truncated `.eml` files
+- HTML-only emails, missing subject/sender, unicode and missing filenames
+- attachments with unsupported types, empty or oversized payloads
+- low-confidence scans, missing student name, path-traversal filenames
+- duplicate names, long names, disk errors, one broken email in a batch
+- idempotent spreadsheet rows, missing-document recalculation
+- FAQ retrieval and escalation for unknown questions
+- Gemini fallback chain when the primary model is overloaded
+
+Inspect a folder of emails without calling Gemini:
+
+```bash
+python scripts/check_inbox.py
+```
+
+Real-Gemini checks (classification, blurry scan, FAQ answer, escalation). Run
+these before the demo and whenever prompts change:
+
+```bash
+RUN_LLM_TESTS=1 pytest tests/test_llm_integration.py -v
+# Windows PowerShell: $env:RUN_LLM_TESTS=1; pytest tests/test_llm_integration.py -v
+```
+
+The integration tests are skipped by default, so CI and teammates without a
+key stay green.
 
 ## Troubleshooting
 

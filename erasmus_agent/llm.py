@@ -9,7 +9,7 @@ from functools import lru_cache
 from google import genai
 from google.genai import types
 
-from .config import GEMINI_FALLBACK_MODELS, GEMINI_MODEL, api_key
+from .config import GEMINI_FALLBACK_MODELS, GEMINI_MODEL, MAX_ATTACHMENT_BYTES, api_key
 from .schemas import DocumentInfo
 
 SUPPORTED_MIME = {
@@ -76,6 +76,14 @@ def classify_document(email_meta: dict, attachment: dict) -> DocumentInfo:
     mime = _guess_mime(attachment.get("name", ""), attachment.get("content_type", ""))
     if mime not in SUPPORTED_MIME:
         raise ValueError(f"Unsupported attachment type: {mime}")
+
+    data = attachment.get("data") or b""
+    if not data:
+        raise ValueError("Empty attachment")
+    if len(data) > MAX_ATTACHMENT_BYTES:
+        raise ValueError(
+            f"Attachment too large: {len(data)} bytes (max {MAX_ATTACHMENT_BYTES})"
+        )
 
     prompt = _PROMPT.format(
         subject=email_meta.get("subject", ""),

@@ -27,6 +27,7 @@ GEMINI_FALLBACK_MODELS = [
     if model.strip()
 ]
 CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.7"))
+MAX_ATTACHMENT_BYTES = int(float(os.getenv("MAX_ATTACHMENT_MB", "15")) * 1024 * 1024)
 SEMESTER = os.getenv("ERASMUS_SEMESTER", "2026-27")
 
 for _folder in (DATA_DIR, INBOX_DIR, OUT_DIR, REVIEW_DIR):

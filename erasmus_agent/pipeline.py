@@ -12,8 +12,50 @@ from .tools.excel_writer import upsert_student
 from .tools.file_saver import move_to_review, save_document
 
 
-def _fallback_info(meta: dict, attachment_name: str) -> DocumentInfo:
-    return DocumentInfo(doc_type=DocType.other, confidence=0.0, notes=f"Could not classify {attachment_name}")
+def _fallback_info(attachment_name: str) -> DocumentInfo:
+    return DocumentInfo(
+        doc_type=DocType.other,
+        confidence=0.0,
+        notes=f"Could not classify {attachment_name}",
+    )
+
+
+def _process_attachment(meta: dict, attachment: dict, threshold: float, result: dict) -> None:
+    name = attachment.get("name", "document")
+    try:
+        info = llm.classify_document(meta, attachment)
+    except Exception as exc:
+        info = _fallback_info(name)
+        result["errors"].append(f"{name}: {exc}")
+
+    uncertain = (
+        info.confidence < threshold
+        or info.doc_type == DocType.other
+        or not info.student_surname
+    )
+    if uncertain:
+        target = move_to_review(
+            attachment["data"],
+            name,
+            REVIEW_DIR,
+            reason=f"confidence={info.confidence:.2f} type={info.doc_type.value} notes={info.notes}",
+        )
+        result["review"].append(target.name)
+        # Keep the row honest: no guessed dates or university from a low-confidence scan.
+        review_info = DocumentInfo(
+            student_first_name=info.student_first_name,
+            student_surname=info.student_surname,
+            doc_type=info.doc_type,
+            semester=info.semester,
+            confidence=info.confidence,
+            notes=info.notes,
+        )
+        upsert_student(SPREADSHEET, review_info, status="needs_review")
+        return
+
+    target = save_document(attachment["data"], name, info, OUT_DIR)
+    result["saved"].append(target.name)
+    upsert_student(SPREADSHEET, info, saved_filename=target.name, status="ok")
 
 
 def process_email(meta: dict, threshold: float = CONFIDENCE_THRESHOLD) -> dict:
@@ -34,41 +76,23 @@ def process_email(meta: dict, threshold: float = CONFIDENCE_THRESHOLD) -> dict:
 
     for attachment in meta["attachments"]:
         try:
-            info = llm.classify_document(meta, attachment)
-        except Exception as exc:
-            info = _fallback_info(meta, attachment.get("name", ""))
-            result["errors"].append(f"{attachment.get('name')}: {exc}")
-
-        uncertain = (
-            info.confidence < threshold
-            or info.doc_type == DocType.other
-            or not info.student_surname
-        )
-        if uncertain:
-            target = move_to_review(
-                attachment["data"],
-                attachment.get("name", "document"),
-                REVIEW_DIR,
-                reason=f"confidence={info.confidence:.2f} type={info.doc_type.value} notes={info.notes}",
-            )
-            result["review"].append(target.name)
-            # Keep the row honest: no guessed dates or university from a low-confidence scan.
-            review_info = DocumentInfo(
-                student_first_name=info.student_first_name,
-                student_surname=info.student_surname,
-                doc_type=info.doc_type,
-                semester=info.semester,
-                confidence=info.confidence,
-                notes=info.notes,
-            )
-            upsert_student(SPREADSHEET, review_info, status="needs_review")
-            continue
-
-        target = save_document(attachment["data"], attachment.get("name", "document"), info, OUT_DIR)
-        result["saved"].append(target.name)
-        upsert_student(SPREADSHEET, info, saved_filename=target.name, status="ok")
+            _process_attachment(meta, attachment, threshold, result)
+        except Exception as exc:  # disk errors, corrupt payloads, Excel locked...
+            result["errors"].append(f"{attachment.get('name', 'document')}: {exc}")
 
     return result
+
+
+def _error_entry(meta: dict, exc: Exception) -> dict:
+    return {
+        "email": meta.get("filename", ""),
+        "subject": meta.get("subject", ""),
+        "sender": meta.get("sender", ""),
+        "saved": [],
+        "review": [],
+        "errors": [str(exc)],
+        "skipped": [],
+    }
 
 
 def run_inbox(
@@ -81,7 +105,13 @@ def run_inbox(
     if limit:
         emails = emails[:limit]
 
-    results = [process_email(meta, threshold) for meta in emails]
+    results: list[dict] = []
+    for meta in emails:
+        try:
+            results.append(process_email(meta, threshold))
+        except Exception as exc:  # one bad email never stops the batch
+            results.append(_error_entry(meta, exc))
+
     return {
         "emails": len(results),
         "saved": sum(len(item["saved"]) for item in results),

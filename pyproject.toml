@@ -15,3 +15,6 @@ select = ["E", "F", "I", "UP"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "integration: calls the real Gemini API (set RUN_LLM_TESTS=1)",
+]

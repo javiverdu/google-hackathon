@@ -55,9 +55,14 @@ def read_email(path: str | Path) -> dict:
 
 
 def iter_inbox(inbox_dir: str | Path) -> Iterator[dict]:
-    """Yield every .eml in a folder, sorted by name."""
+    """Yield every .eml in a folder (case-insensitive), sorted by name."""
     folder = Path(inbox_dir)
-    for path in sorted(folder.glob("*.eml")):
+    if not folder.is_dir():
+        return
+    paths = sorted(
+        path for path in folder.iterdir() if path.is_file() and path.suffix.lower() == ".eml"
+    )
+    for path in paths:
         try:
             yield read_email(path)
         except Exception as exc:  # one broken file must not kill the batch
