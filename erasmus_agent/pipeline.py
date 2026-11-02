@@ -1,0 +1,81 @@
+"""End-to-end inbox pipeline: email -> classification -> files -> spreadsheet."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from . import llm
+from .config import CONFIDENCE_THRESHOLD, INBOX_DIR, OUT_DIR, REVIEW_DIR, SPREADSHEET
+from .schemas import DocType, DocumentInfo
+from .tools.email_reader import iter_inbox
+from .tools.excel_writer import upsert_student
+from .tools.file_saver import move_to_review, save_document
+
+
+def _fallback_info(meta: dict, attachment_name: str) -> DocumentInfo:
+    return DocumentInfo(doc_type=DocType.other, confidence=0.0, notes=f"Could not classify {attachment_name}")
+
+
+def process_email(meta: dict, threshold: float = CONFIDENCE_THRESHOLD) -> dict:
+    """Process every attachment of one email. Returns a report entry."""
+    result = {
+        "email": meta.get("filename", ""),
+        "subject": meta.get("subject", ""),
+        "sender": meta.get("sender", ""),
+        "saved": [],
+        "review": [],
+        "errors": [meta["error"]] if meta.get("error") else [],
+    }
+
+    if not meta.get("attachments"):
+        result["errors"].append("No attachments")
+        return result
+
+    for attachment in meta["attachments"]:
+        try:
+            info = llm.classify_document(meta, attachment)
+        except Exception as exc:
+            info = _fallback_info(meta, attachment.get("name", ""))
+            result["errors"].append(f"{attachment.get('name')}: {exc}")
+
+        uncertain = (
+            info.confidence < threshold
+            or info.doc_type == DocType.other
+            or not info.student_surname
+        )
+        if uncertain:
+            target = move_to_review(
+                attachment["data"],
+                attachment.get("name", "document"),
+                REVIEW_DIR,
+                reason=f"confidence={info.confidence:.2f} type={info.doc_type.value} notes={info.notes}",
+            )
+            result["review"].append(target.name)
+            upsert_student(SPREADSHEET, info, status="needs_review")
+            continue
+
+        target = save_document(attachment["data"], attachment.get("name", "document"), info, OUT_DIR)
+        result["saved"].append(target.name)
+        upsert_student(SPREADSHEET, info, saved_filename=target.name, status="ok")
+
+    return result
+
+
+def run_inbox(
+    inbox_dir: str | Path = INBOX_DIR,
+    threshold: float = CONFIDENCE_THRESHOLD,
+    limit: int | None = None,
+) -> dict:
+    """Run the whole inbox. This is what the UI button calls."""
+    emails = list(iter_inbox(inbox_dir))
+    if limit:
+        emails = emails[:limit]
+
+    results = [process_email(meta, threshold) for meta in emails]
+    return {
+        "emails": len(results),
+        "saved": sum(len(item["saved"]) for item in results),
+        "review": sum(len(item["review"]) for item in results),
+        "errors": sum(len(item["errors"]) for item in results),
+        "results": results,
+    }

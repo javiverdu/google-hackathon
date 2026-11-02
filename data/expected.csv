@@ -1,0 +1,11 @@
+email,first,surname,doc_type,semester,host,start,end
+email_01.eml,Ana,Garcia Lopez,Learning Agreement,2026-27,University of Bologna,2026-09-01,2027-02-28
+email_02.eml,Jonas,Weber,Transcript of Records,2026-27,TU Berlin,2026-10-01,2027-03-31
+email_03.eml,Maria,Rossi,Insurance Certificate,2026-27,University of Padova,2026-09-15,2027-02-15
+email_04.eml,Lucas,Martin,Certificate of Arrival,2026-27,Universite de Lyon,2026-09-05,2027-01-30
+email_05.eml,Sofia,Almeida,Learning Agreement,2026-27,University of Coimbra,2026-09-10,2027-02-10
+email_05.eml,Sofia,Almeida,Insurance Certificate,2026-27,University of Coimbra,2026-09-10,2027-02-10
+email_06.eml,Emma,Dubois,Transcript of Records,2026-27,Sorbonne University,2026-09-20,2027-03-20
+email_07.eml,Pablo,Sanchez,Learning Agreement,2026-27,University of Valencia,2026-09-01,2027-02-28
+email_08.eml,Lena,Novak,Hostel booking confirmation,2026-27,University of Ljubljana,2026-10-01,2027-02-01
+email_10.eml,Chiara,Bianchi,Certificate of Arrival,2026-27,University of Milan,2026-09-12,2027-02-12

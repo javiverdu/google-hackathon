@@ -1,0 +1,5 @@
+-r requirements.txt
+pytest>=8.0
+ruff>=0.5
+fpdf2>=2.7
+pillow>=10.0
