@@ -81,7 +81,9 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 - [ ] 8.2 URL returning `Content-Disposition`: that filename is used.
 - [ ] 8.3 `file:///etc/passwd`: rejected, only http(s) allowed.
 - [ ] 8.4 404 URL: clear error, no crash.
-- [ ] 8.5 HTML page URL: goes to review or errors, never silently saved as a document.
+- [ ] 8.5 HTML page URL: warning "That URL is a web page, not a document", never saved.
+- [ ] 8.6 `http://localhost/...` or `http://192.168.x.x/...`: rejected with "not reachable".
+- [ ] 8.7 Login-protected URL (403): warning that the link needs a login.
 
 ## 9. Failure injection (P1)
 

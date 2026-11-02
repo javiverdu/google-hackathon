@@ -18,6 +18,7 @@ from erasmus_agent.tools.inbox_store import (
     store_email_bytes,
     student_submission_email,
 )
+from erasmus_agent.tools.web_download import DownloadError
 
 st.set_page_config(page_title="Erasmus DocFlow", page_icon="🎓", layout="wide")
 
@@ -224,8 +225,18 @@ with inbox_tab:
                             key=f"dl_{key}",
                         )
 
-    with st.expander("🌐 Download a document from a web page"):
-        url = st.text_input("Document URL (http/https)", key="web_url")
+    with st.expander("🌐 Download a document from a web page (optional)"):
+        st.caption(
+            "Only direct links to a file work: the URL must end in `.pdf`, `.jpg`, `.png` or "
+            "similar, or return the file itself. Login pages, Google Drive folders, Moodle "
+            "links and pages where you must click a button are **not** supported. "
+            "Prefer the Student form or upload the `.eml` instead."
+        )
+        url = st.text_input(
+            "Direct file URL (http/https)",
+            key="web_url",
+            placeholder="https://example.edu/files/learning_agreement.pdf",
+        )
         if st.button("Download and file", key="web_button") and url:
             with st.spinner("Downloading and classifying..."):
                 try:
@@ -242,7 +253,12 @@ with inbox_tab:
                         f"Saved: {', '.join(result['saved']) or 'none'} · "
                         f"review: {len(result['review'])}"
                     )
-                except Exception as exc:
+                except DownloadError as exc:
+                    if exc.kind in {"html", "scheme", "not_found", "auth"}:
+                        st.warning(str(exc))
+                    else:
+                        st.error(str(exc))
+                except Exception as exc:  # noqa: BLE001 - last resort, keep the UI alive
                     st.error(f"Download failed: {exc}")
 
 with form_tab:
