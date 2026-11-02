@@ -62,12 +62,19 @@ st.markdown(
       html, body, .stApp { background: var(--cream); }
       [data-testid="stAppViewContainer"], [data-testid="stMain"] { background: var(--cream); }
       [data-testid="stHeader"] { background: transparent; }
+      [data-testid="stToolbar"], [data-testid="stDecoration"] { display: none; }
       .block-container {padding-top: 2.5rem; padding-bottom: 4rem; max-width: 1200px;}
 
-      .stApp, .stApp p, .stApp li, .stApp label, .stApp span,
+      .stApp, .stApp p, .stApp li, .stApp label,
       [data-testid="stMarkdownContainer"] {
         font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
         color: var(--charcoal);
+      }
+      /* Keep Streamlit's icon font: never inherit the body face into ligatures */
+      [data-testid="stIconMaterial"] {
+        font-family: 'Material Symbols Rounded' !important;
+        font-weight: 400 !important;
+        letter-spacing: normal !important;
       }
       .stApp p {line-height: 1.5;}
 
@@ -80,7 +87,7 @@ st.markdown(
         letter-spacing: 0;
       }
       h1 {font-weight: 900; font-size: 3rem; line-height: 1.1;}
-      h2 {font-weight: 900; font-size: 2rem; line-height: 1.2;}
+      h2 {font-weight: 900; font-size: 1.75rem; line-height: 1.2;}
       h3 {font-weight: 700; font-size: 1.4rem; line-height: 1.25;}
 
       [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p {
@@ -154,21 +161,39 @@ st.markdown(
         transition: background .15s ease, color .15s ease, border-color .15s ease;
       }
       .stButton > button[kind="primary"],
-      [data-testid="stFormSubmitButton"] > button[kind="primary"] {
+      [data-testid="stBaseButton-primary"],
+      [data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"],
+      [data-testid="stBaseButton-primaryFormSubmit"] {
         background: var(--onyx);
         color: var(--white);
         border: 1px solid var(--onyx);
         box-shadow: var(--shadow-subtle);
       }
+      .stButton > button[kind="primary"] *,
+      [data-testid="stBaseButton-primary"] *,
+      [data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] *,
+      [data-testid="stBaseButton-primaryFormSubmit"] * {
+        color: var(--white) !important;
+      }
+      .stButton > button[kind="primary"] [data-testid="stIconMaterial"],
+      [data-testid="stBaseButton-primary"] [data-testid="stIconMaterial"],
+      [data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] [data-testid="stIconMaterial"],
+      [data-testid="stBaseButton-primaryFormSubmit"] [data-testid="stIconMaterial"] {
+        font-family: 'Material Symbols Rounded' !important;
+      }
       .stButton > button[kind="primary"]:hover,
-      [data-testid="stFormSubmitButton"] > button[kind="primary"]:hover {
+      [data-testid="stBaseButton-primary"]:hover,
+      [data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"]:hover,
+      [data-testid="stBaseButton-primaryFormSubmit"]:hover {
         background: var(--charcoal);
         border-color: var(--charcoal);
         color: var(--white);
       }
       .stButton > button[kind="secondary"],
       .stDownloadButton > button,
-      [data-testid="stFormSubmitButton"] > button[kind="secondary"] {
+      [data-testid="stBaseButton-secondary"],
+      [data-testid="stFormSubmitButton"] > button[kind="secondaryFormSubmit"],
+      [data-testid="stBaseButton-secondaryFormSubmit"] {
         background: var(--white);
         color: var(--onyx);
         border: 1px solid var(--onyx);
@@ -176,7 +201,9 @@ st.markdown(
       }
       .stButton > button[kind="secondary"]:hover,
       .stDownloadButton > button:hover,
-      [data-testid="stFormSubmitButton"] > button[kind="secondary"]:hover {
+      [data-testid="stBaseButton-secondary"]:hover,
+      [data-testid="stFormSubmitButton"] > button[kind="secondaryFormSubmit"]:hover,
+      [data-testid="stBaseButton-secondaryFormSubmit"]:hover {
         background: var(--frost);
         color: var(--onyx);
         border-color: var(--onyx);
@@ -184,7 +211,7 @@ st.markdown(
       .stButton > button:disabled {opacity: .45;}
 
       /* Tabs as a rounded editorial nav bar */
-      [data-baseweb="tab-list"] {
+      [role="tablist"] {
         background: var(--white);
         border: 1px solid var(--border);
         border-radius: 16px;
@@ -192,19 +219,18 @@ st.markdown(
         gap: 4px;
         box-shadow: var(--shadow-lg);
       }
-      [data-baseweb="tab"] {
+      [data-testid="stTab"] {
         border-radius: 12px;
         padding: 8px 16px;
+      }
+      [data-testid="stTab"] p {
         font-weight: 500;
         color: var(--graphite);
-        background: transparent;
       }
-      [data-baseweb="tab"]:hover {background: var(--frost); color: var(--onyx);}
-      [aria-selected="true"][data-baseweb="tab"] {
-        background: var(--onyx) !important;
-        color: var(--white) !important;
-      }
-      [data-baseweb="tab-highlight"], [data-baseweb="tab-border"] {display: none;}
+      [data-testid="stTab"]:hover {background: var(--frost);}
+      [data-testid="stTab"][aria-selected="true"] {background: var(--onyx);}
+      [data-testid="stTab"][aria-selected="true"] p {color: var(--white);}
+      .react-aria-SelectionIndicator {display: none;}
 
       /* Metrics: white cards with a colour-coded top edge */
       div[data-testid="stMetric"] {
@@ -257,19 +283,33 @@ st.markdown(
         box-shadow: var(--shadow-lg);
       }
 
-      /* Inputs */
-      [data-testid="stTextInput"] input,
-      [data-testid="stNumberInput"] input,
-      [data-testid="stTextArea"] textarea,
-      [data-testid="stDateInput"] input,
+      /* Inputs: Streamlit 1.66 draws the border on the wrapper, not the <input> */
+      [data-testid="stTextInputRootElement"],
+      [data-testid="stTextAreaRootElement"],
+      [data-testid="stDateInputField"],
+      [data-testid="stNumberInputContainer"],
+      [data-testid="stSelectbox"] .react-aria-ComboBox > div,
       [data-baseweb="select"] > div {
         background: var(--white) !important;
+        border: 1px solid var(--border) !important;
         border-radius: 12px !important;
-        border-color: var(--border) !important;
+        box-shadow: none !important;
         color: var(--charcoal) !important;
       }
-      [data-testid="stTextInput"] input:focus,
-      [data-testid="stTextArea"] textarea:focus {
+      [data-testid="stTextInputRootElement"] input,
+      [data-testid="stNumberInputField"],
+      [data-testid="stTextAreaRootElement"] textarea,
+      [data-testid="stDateInputField"] input,
+      [data-testid="stSelectbox"] .react-aria-ComboBox > div > input {
+        background: transparent !important;
+        border: none !important;
+        color: var(--charcoal) !important;
+      }
+      [data-testid="stTextInputRootElement"]:focus-within,
+      [data-testid="stTextAreaRootElement"]:focus-within,
+      [data-testid="stDateInputField"]:focus-within,
+      [data-testid="stNumberInputContainer"]:focus-within,
+      [data-testid="stSelectbox"] .react-aria-ComboBox > div:focus-within {
         border-color: var(--cobalt) !important;
         box-shadow: 0 0 0 3px rgba(27, 97, 201, .12) !important;
       }
