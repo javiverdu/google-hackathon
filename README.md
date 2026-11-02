@@ -13,7 +13,7 @@ answers common questions from `faq.md`, and sends anything uncertain to
 | Layer | Tool |
 |---|---|
 | Agent | Google ADK (`google-adk`) |
-| Model | Gemini via AI Studio key |
+| Model | Gemini (`gemini-3.5-flash`, automatic fallbacks if overloaded) |
 | Emails | Python `email` stdlib |
 | Spreadsheet | `openpyxl` |
 | UI | Streamlit, deployable to Streamlit Community Cloud |
@@ -144,6 +144,7 @@ Tests never call Gemini, so they run without an API key.
 | `No module named google.adk` | Activate the venv, reinstall requirements |
 | `GOOGLE_API_KEY missing` | `.env` in repo root, or Streamlit secrets |
 | 429 from Gemini | Lower "Max emails per run", one retry is built in |
+| 503 from Gemini | Model overloaded: fallback list in `.env` handles it, or change `GEMINI_MODEL` |
 | Blurry scan rejected | Expected: it lands in `data/review/`, demo the human step |
 | Windows activation blocked | `Set-ExecutionPolicy -Scope Process Bypass` |
 

@@ -51,6 +51,7 @@ with st.sidebar:
     threshold = st.slider("Confidence threshold", 0.0, 1.0, config.CONFIDENCE_THRESHOLD, 0.05)
     limit = st.number_input("Max emails per run", 1, 50, 10)
     st.caption(f"Model: `{config.GEMINI_MODEL}`")
+    st.caption("Fallbacks: " + ", ".join(f"`{m}`" for m in config.GEMINI_FALLBACK_MODELS))
     st.caption(f"Data folder: `{config.DATA_DIR}`")
     if not (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")):
         st.warning("No GOOGLE_API_KEY detected. Add it in .env or Streamlit secrets.")
@@ -88,7 +89,8 @@ with inbox_tab:
                 st.session_state["report"] = report
                 st.success(
                     f"{report['emails']} emails · {report['saved']} documents saved · "
-                    f"{report['review']} sent to review · {report['errors']} errors"
+                    f"{report['review']} sent to review · {report['errors']} errors · "
+                    f"{report['skipped']} without attachments"
                 )
             except Exception as exc:
                 st.error(f"Run failed: {exc}")
@@ -99,6 +101,8 @@ with inbox_tab:
             with st.expander(f"{item['email']} — {item['subject'] or 'no subject'}"):
                 st.write("Saved:", ", ".join(item["saved"]) or "none")
                 st.write("Review:", ", ".join(item["review"]) or "none")
+                if item["skipped"]:
+                    st.info("; ".join(item["skipped"]))
                 if item["errors"]:
                     st.warning("; ".join(item["errors"]))
 

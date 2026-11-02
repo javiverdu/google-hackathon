@@ -25,10 +25,11 @@ def process_email(meta: dict, threshold: float = CONFIDENCE_THRESHOLD) -> dict:
         "saved": [],
         "review": [],
         "errors": [meta["error"]] if meta.get("error") else [],
+        "skipped": [],
     }
 
     if not meta.get("attachments"):
-        result["errors"].append("No attachments")
+        result["skipped"].append("No attachments (question only)")
         return result
 
     for attachment in meta["attachments"]:
@@ -51,7 +52,16 @@ def process_email(meta: dict, threshold: float = CONFIDENCE_THRESHOLD) -> dict:
                 reason=f"confidence={info.confidence:.2f} type={info.doc_type.value} notes={info.notes}",
             )
             result["review"].append(target.name)
-            upsert_student(SPREADSHEET, info, status="needs_review")
+            # Keep the row honest: no guessed dates or university from a low-confidence scan.
+            review_info = DocumentInfo(
+                student_first_name=info.student_first_name,
+                student_surname=info.student_surname,
+                doc_type=info.doc_type,
+                semester=info.semester,
+                confidence=info.confidence,
+                notes=info.notes,
+            )
+            upsert_student(SPREADSHEET, review_info, status="needs_review")
             continue
 
         target = save_document(attachment["data"], attachment.get("name", "document"), info, OUT_DIR)
@@ -77,5 +87,6 @@ def run_inbox(
         "saved": sum(len(item["saved"]) for item in results),
         "review": sum(len(item["review"]) for item in results),
         "errors": sum(len(item["errors"]) for item in results),
+        "skipped": sum(len(item["skipped"]) for item in results),
         "results": results,
     }

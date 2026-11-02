@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import mimetypes
+from functools import lru_cache
 
 from google import genai
 from google.genai import types
 
-from .config import GEMINI_MODEL, api_key
+from .config import GEMINI_FALLBACK_MODELS, GEMINI_MODEL, api_key
 from .schemas import DocumentInfo
 
 SUPPORTED_MIME = {
@@ -37,8 +38,30 @@ Email body (truncated):
 """
 
 
+@lru_cache(maxsize=1)
 def _client() -> genai.Client:
-    return genai.Client(api_key=api_key())
+    return genai.Client(
+        api_key=api_key(),
+        http_options=types.HttpOptions(
+            timeout=60_000,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
+
+
+def _generate(contents, config: types.GenerateContentConfig | None = None):
+    """Try the configured model, then fallbacks. Hackathon models get overloaded."""
+    errors: list[str] = []
+    for model in [GEMINI_MODEL, *GEMINI_FALLBACK_MODELS]:
+        try:
+            return _client().models.generate_content(
+                model=model,
+                contents=contents,
+                config=config,
+            )
+        except Exception as exc:
+            errors.append(f"{model}: {str(exc).splitlines()[0][:160]}")
+    raise RuntimeError("All Gemini models failed: " + " | ".join(errors))
 
 
 def _guess_mime(name: str, declared: str) -> str:
@@ -59,8 +82,7 @@ def classify_document(email_meta: dict, attachment: dict) -> DocumentInfo:
         sender=email_meta.get("sender", ""),
         body=(email_meta.get("body", "") or "")[:4000],
     )
-    response = _client().models.generate_content(
-        model=GEMINI_MODEL,
+    response = _generate(
         contents=[
             types.Part.from_text(text=prompt),
             types.Part.from_bytes(data=attachment["data"], mime_type=mime),
@@ -78,8 +100,7 @@ def classify_document(email_meta: dict, attachment: dict) -> DocumentInfo:
 
 def answer_question(question: str, faq_text: str, context: str = "") -> str:
     """Answer only from the FAQ and the student table; otherwise escalate."""
-    response = _client().models.generate_content(
-        model=GEMINI_MODEL,
+    response = _generate(
         contents=[
             types.Part.from_text(
                 text=(
@@ -98,8 +119,7 @@ def answer_question(question: str, faq_text: str, context: str = "") -> str:
 
 def draft_reply(student_name: str, subject: str, summary: str, faq_text: str) -> str:
     """Nice-to-have: reply draft staff can approve before sending."""
-    response = _client().models.generate_content(
-        model=GEMINI_MODEL,
+    response = _generate(
         contents=[
             types.Part.from_text(
                 text=(

@@ -17,7 +17,15 @@ REVIEW_DIR = DATA_DIR / "review"
 SPREADSHEET = DATA_DIR / "students.xlsx"
 FAQ_FILE = PROJECT_ROOT / "faq.md"
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+GEMINI_FALLBACK_MODELS = [
+    model.strip()
+    for model in os.getenv(
+        "GEMINI_FALLBACK_MODELS",
+        "gemini-3.8-flash,gemini-3.5-flash-lite,gemini-flash-latest,gemini-3.1-flash-lite",
+    ).split(",")
+    if model.strip()
+]
 CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.7"))
 SEMESTER = os.getenv("ERASMUS_SEMESTER", "2026-27")
 
