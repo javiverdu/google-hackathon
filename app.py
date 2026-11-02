@@ -18,6 +18,7 @@ from erasmus_agent.tools.inbox_store import (
     store_email_bytes,
     student_submission_email,
 )
+from erasmus_agent.tools.state import export_state, reset_demo_data, restore_state, state_summary
 from erasmus_agent.tools.web_download import DownloadError
 
 st.set_page_config(page_title="Erasmus DocFlow", page_icon="🎓", layout="wide")
@@ -66,6 +67,70 @@ with st.sidebar:
             'No GOOGLE_API_KEY detected. Add GOOGLE_API_KEY = "..." to Streamlit secrets, '
             "or to .env for local runs."
         )
+
+    st.divider()
+    st.caption(
+        "**Public demo.** No login: everyone who opens this URL shares the same "
+        "files and spreadsheet. Do not upload real student data."
+    )
+    summary = state_summary()
+    st.caption(
+        f"Generated files: {summary['documents']} documents · "
+        f"{summary['review']} in review · spreadsheet "
+        f"{'ready' if summary['spreadsheet'] else 'empty'}."
+    )
+    with st.expander("💾 Demo data: save, restore, reset"):
+        st.caption(
+            "Streamlit Cloud deletes generated files when the app sleeps. "
+            "Save the bundle before the demo and restore it after a reboot."
+        )
+        if st.button("📦 Prepare state bundle", key="prepare_state"):
+            st.session_state["state_bundle"] = export_state()
+        bundle = st.session_state.get("state_bundle")
+        if bundle:
+            st.download_button(
+                "⬇ Download state (.zip)",
+                data=bundle,
+                file_name="erasmus_state.zip",
+                mime="application/zip",
+                key="download_state",
+            )
+            st.caption(f"{len(bundle) / 1024:.0f} KB. Prepare again after a new run.")
+
+        restore_upload = st.file_uploader(
+            "Restore a state bundle", type=["zip"], key="state_upload"
+        )
+        if restore_upload is not None and st.button("Restore state", key="restore_state"):
+            try:
+                restored = restore_state(restore_upload.getvalue())
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.pop("report", None)
+                st.session_state.pop("state_bundle", None)
+                st.session_state["state_flash"] = f"Restored {restored['files']} files."
+                st.rerun()
+
+        st.divider()
+        confirm_reset = st.checkbox(
+            "I understand this deletes the spreadsheet, documents, review files "
+            "and escalations (inbox is kept).",
+            key="reset_confirm",
+        )
+        if st.button(
+            "Reset demo data",
+            key="reset_button",
+            disabled=not confirm_reset,
+        ):
+            removed = reset_demo_data()
+            st.session_state.pop("report", None)
+            st.session_state.pop("state_bundle", None)
+            st.session_state["state_flash"] = f"Removed {removed['removed']} files. Inbox kept."
+            st.rerun()
+
+    flash = st.session_state.pop("state_flash", None)
+    if flash:
+        st.success(flash)
 def _visible_files(folder) -> list:
     """Real documents only: no .gitkeep, no review reason sidecars."""
     if not folder.exists():

@@ -105,6 +105,11 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 - [ ] 11.1 Run, then Reboot: outputs cleared, 10 sample emails remain.
 - [ ] 11.2 Two browser tabs press Run together: no crash, consistent final state.
 - [ ] 11.3 Idle 20+ minutes, reload: app wakes, data reset, still functional.
+- [ ] 11.4 Sidebar shows "Public demo. No login..." and "Generated files: N documents".
+- [ ] 11.5 **Prepare state bundle → Download state (.zip)**: bundle downloads, size shown.
+- [ ] 11.6 Reboot, upload the bundle, **Restore state**: spreadsheet and documents return.
+- [ ] 11.7 Upload a random `.zip`: `Unexpected file in bundle` or `not a valid .zip`, nothing changes.
+- [ ] 11.8 **Reset demo data** disabled until the checkbox; after reset, inbox keeps 10 emails.
 
 ## 12. Cross-browser and responsive (P2)
 
@@ -121,7 +126,7 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 ## 14. Automated regression (run before the demo)
 
 ```bash
-pytest -q                                                   # 89 offline tests
+pytest -q                                                   # 111 offline tests
 python scripts/check_inbox.py                               # inbox doctor
 python scripts/check_requirements.py                        # 15 must-have checks
 RUN_LLM_TESTS=1 pytest tests/test_llm_integration.py -v     # 4 live Gemini tests

@@ -73,6 +73,7 @@ erasmus_agent/
     faq.py                  FAQ lookup
     escalation.py           questions handed to a person
     web_download.py         download a document from an http(s) page
+    state.py                export, restore and reset the demo data bundle
 scripts/make_sample_data.py 10 fake emails + PDFs/JPGs
 scripts/check_inbox.py      validate a folder without calling Gemini
 scripts/check_requirements.py  audit must-have requirements on generated data
@@ -82,6 +83,7 @@ data/out/                   renamed documents (gitignored)
 data/review/                uncertain documents (gitignored)
 data/students.xlsx          generated spreadsheet (gitignored)
 docs/PLAN.md | docs/PLAN.es.md  team plan (English / Spanish)
+docs/IMPLEMENTATION.md      architecture and data flow with Mermaid diagrams
 docs/QA_CHECKLIST.md        web QA checklist for the deployed app
 faq.md                      demo FAQ
 ```
@@ -228,5 +230,18 @@ key stay green.
 - Flag missing and expired documents (`Missing` and `Expired` columns)
 - Download documents from a web page with the same naming rules (Inbox → URL box)
 - Public Streamlit deployment (see above); `adk web` for the ADK agent locally
+- Save/restore the demo state as a `.zip` and reset generated files (sidebar → **Demo data**)
 
-Not implemented: real Gmail mailbox.
+Not implemented: real Gmail mailbox, login, persistent database.
+
+## Demo data on Streamlit Cloud
+
+The container filesystem is ephemeral. Before the demo:
+
+1. Sidebar → **Demo data → Prepare state bundle** → **Download state (.zip)**.
+2. After a reboot, upload the same bundle and press **Restore state**.
+3. **Reset demo data** clears the spreadsheet, documents, review files and
+   escalations but keeps the ten sample emails in `data/inbox/`.
+
+The public URL has no login: every visitor shares the same files. Do not upload
+real student data.
