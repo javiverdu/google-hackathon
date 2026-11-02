@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from datetime import date
 from enum import StrEnum
 from pathlib import Path
 
@@ -77,3 +78,19 @@ def build_filename(info: DocumentInfo, suffix: str = ".pdf") -> str:
 
 def file_suffix(name: str, default: str = ".pdf") -> str:
     return Path(name).suffix or default
+
+
+def parse_date(value: str) -> date | None:
+    """Accept only strict ISO dates; LLM output can contain anything."""
+    try:
+        return date.fromisoformat((value or "").strip()[:10])
+    except ValueError:
+        return None
+
+
+def is_expired(end_date: str, today: date | None = None) -> bool:
+    """True only for a valid date strictly before today."""
+    parsed = parse_date(end_date)
+    if parsed is None:
+        return False
+    return parsed < (today or date.today())

@@ -19,6 +19,7 @@ dist/
 data/out/*
 data/review/*
 data/students.xlsx
+data/escalations.csv
 !data/out/.gitkeep
 !data/review/.gitkeep
 

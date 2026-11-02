@@ -15,6 +15,7 @@ INBOX_DIR = DATA_DIR / "inbox"
 OUT_DIR = DATA_DIR / "out"
 REVIEW_DIR = DATA_DIR / "review"
 SPREADSHEET = DATA_DIR / "students.xlsx"
+ESCALATIONS = DATA_DIR / "escalations.csv"
 FAQ_FILE = PROJECT_ROOT / "faq.md"
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")

@@ -69,10 +69,13 @@ erasmus_agent/
   tools/
     email_reader.py         .eml parsing
     file_saver.py           rename + review folder
-    excel_writer.py         one row per student
+    excel_writer.py         one row per student + Documents detail sheet
     faq.py                  FAQ lookup
+    escalation.py           questions handed to a person
+    web_download.py         download a document from an http(s) page
 scripts/make_sample_data.py 10 fake emails + PDFs/JPGs
 scripts/check_inbox.py      validate a folder without calling Gemini
+scripts/check_requirements.py  audit must-have requirements on generated data
 tests/                      offline tests + optional live Gemini tests
 data/inbox/                 input .eml files (samples committed)
 data/out/                   renamed documents (gitignored)
@@ -116,7 +119,12 @@ local; the deployed app calls the same pipeline functions.
                  renamed file              original + reason
                           \                     /
                       students.xlsx (one row per student)
+                          |
+          Missing / Expired columns + Documents detail sheet
 ```
+
+Unknown questions go to `data/escalations.csv` and appear in the UI under
+Students → "Handed to a person".
 
 Uncertain cases: `confidence < 0.7`, `doc_type == Other`, or missing surname.
 They never block the rest of the batch.
@@ -137,7 +145,7 @@ pytest
 ruff check .
 ```
 
-57 offline tests, no key needed. They cover the ugly cases:
+80 offline tests, no key needed. They cover the ugly cases:
 
 - empty, garbage and truncated `.eml` files
 - HTML-only emails, missing subject/sender, unicode and missing filenames
@@ -145,8 +153,17 @@ ruff check .
 - low-confidence scans, missing student name, path-traversal filenames
 - duplicate names, long names, disk errors, one broken email in a batch
 - idempotent spreadsheet rows, missing-document recalculation
+- expired documents (valid future date, invalid date, renewal clears the flag)
+- escalations persisted to CSV with flattened questions
+- web downloads: Content-Disposition names, MIME fallback, size limits, http-only
 - FAQ retrieval and escalation for unknown questions
 - Gemini fallback chain when the primary model is overloaded
+
+Check the generated artifacts against the must-have list:
+
+```bash
+python scripts/check_requirements.py
+```
 
 Inspect a folder of emails without calling Gemini:
 
@@ -176,9 +193,11 @@ key stay green.
 | Blurry scan rejected | Expected: it lands in `data/review/`, demo the human step |
 | Windows activation blocked | `Set-ExecutionPolicy -Scope Process Bypass` |
 
-## Nice-to-haves (only after must-haves work)
+## Nice-to-haves (implemented)
 
-- Draft reply emails for staff approval (`llm.draft_reply`)
-- Flag expired documents using dates already extracted
-- Download documents from a web page with the same naming tool
-- Gmail test mailbox (`imaplib` + app password)
+- Draft reply emails for staff approval (Inbox → expander → **Draft reply**)
+- Flag missing and expired documents (`Missing` and `Expired` columns)
+- Download documents from a web page with the same naming rules (Inbox → URL box)
+- Public Streamlit deployment (see above); `adk web` for the ADK agent locally
+
+Not implemented: real Gmail mailbox.

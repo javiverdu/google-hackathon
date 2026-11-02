@@ -10,6 +10,7 @@ from .schemas import DocType, DocumentInfo
 from .tools.email_reader import iter_inbox
 from .tools.excel_writer import upsert_student
 from .tools.file_saver import move_to_review, save_document
+from .tools.web_download import download_document
 
 
 def _fallback_info(attachment_name: str) -> DocumentInfo:
@@ -28,6 +29,16 @@ def _process_attachment(meta: dict, attachment: dict, threshold: float, result: 
         info = _fallback_info(name)
         result["errors"].append(f"{name}: {exc}")
 
+    document = {
+        "student": f"{info.student_first_name} {info.student_surname}".strip(),
+        "first": info.student_first_name,
+        "surname": info.student_surname,
+        "doc_type": info.doc_type.value,
+        "semester": info.semester,
+        "filename": "",
+        "status": "",
+    }
+
     uncertain = (
         info.confidence < threshold
         or info.doc_type == DocType.other
@@ -41,6 +52,8 @@ def _process_attachment(meta: dict, attachment: dict, threshold: float, result: 
             reason=f"confidence={info.confidence:.2f} type={info.doc_type.value} notes={info.notes}",
         )
         result["review"].append(target.name)
+        document.update(filename=target.name, status="review")
+        result["documents"].append(document)
         # Keep the row honest: no guessed dates or university from a low-confidence scan.
         review_info = DocumentInfo(
             student_first_name=info.student_first_name,
@@ -55,6 +68,8 @@ def _process_attachment(meta: dict, attachment: dict, threshold: float, result: 
 
     target = save_document(attachment["data"], name, info, OUT_DIR)
     result["saved"].append(target.name)
+    document.update(filename=target.name, status="saved")
+    result["documents"].append(document)
     upsert_student(SPREADSHEET, info, saved_filename=target.name, status="ok")
 
 
@@ -68,6 +83,7 @@ def process_email(meta: dict, threshold: float = CONFIDENCE_THRESHOLD) -> dict:
         "review": [],
         "errors": [meta["error"]] if meta.get("error") else [],
         "skipped": [],
+        "documents": [],
     }
 
     if not meta.get("attachments"):
@@ -92,6 +108,7 @@ def _error_entry(meta: dict, exc: Exception) -> dict:
         "review": [],
         "errors": [str(exc)],
         "skipped": [],
+        "documents": [],
     }
 
 
@@ -120,3 +137,16 @@ def run_inbox(
         "skipped": sum(len(item["skipped"]) for item in results),
         "results": results,
     }
+
+
+def process_url(url: str, threshold: float = CONFIDENCE_THRESHOLD) -> dict:
+    """Download one document from http(s) and file it like an email attachment."""
+    attachment = download_document(url)
+    meta = {
+        "filename": url,
+        "subject": f"Downloaded from web: {attachment['name']}",
+        "sender": "web",
+        "body": "",
+        "attachments": [attachment],
+    }
+    return process_email(meta, threshold)

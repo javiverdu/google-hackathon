@@ -9,8 +9,9 @@ import zipfile
 import streamlit as st
 
 from erasmus_agent import config, llm
-from erasmus_agent.pipeline import run_inbox
+from erasmus_agent.pipeline import process_url, run_inbox
 from erasmus_agent.tools.email_reader import iter_inbox
+from erasmus_agent.tools.escalation import log_escalation, read_escalations
 from erasmus_agent.tools.excel_writer import read_students
 from erasmus_agent.tools.faq import load_faq, search_faq
 
@@ -101,10 +102,57 @@ with inbox_tab:
             with st.expander(f"{item['email']} — {item['subject'] or 'no subject'}"):
                 st.write("Saved:", ", ".join(item["saved"]) or "none")
                 st.write("Review:", ", ".join(item["review"]) or "none")
+                if item.get("documents"):
+                    st.dataframe(item["documents"], use_container_width=True, hide_index=True)
                 if item["skipped"]:
                     st.info("; ".join(item["skipped"]))
                 if item["errors"]:
                     st.warning("; ".join(item["errors"]))
+
+                saved = [doc for doc in item.get("documents", []) if doc["status"] == "saved"]
+                if saved:
+                    key = f"draft_{item['email']}"
+                    if st.button("✉ Draft reply for staff review", key=f"btn_{item['email']}"):
+                        summary = "Documents received: " + ", ".join(
+                            f"{doc['doc_type']} ({doc['filename']})" for doc in saved
+                        )
+                        try:
+                            st.session_state[key] = llm.draft_reply(
+                                saved[0]["student"], item["subject"], summary, load_faq()
+                            )
+                        except Exception as exc:
+                            st.warning(f"Draft failed: {exc}")
+                    draft = st.session_state.get(key)
+                    if draft:
+                        st.text_area("Draft — staff checks and sends", draft, height=180, key=f"area_{key}")
+                        st.download_button(
+                            "⬇ Download draft (.txt)",
+                            data=draft.encode("utf-8"),
+                            file_name=f"reply_{item['email']}.txt",
+                            mime="text/plain",
+                            key=f"dl_{key}",
+                        )
+
+    with st.expander("🌐 Download a document from a web page"):
+        url = st.text_input("Document URL (http/https)", key="web_url")
+        if st.button("Download and file", key="web_button") and url:
+            with st.spinner("Downloading and classifying..."):
+                try:
+                    result = process_url(url, threshold=threshold)
+                    st.session_state["report"] = {
+                        "emails": 1,
+                        "saved": len(result["saved"]),
+                        "review": len(result["review"]),
+                        "errors": len(result["errors"]),
+                        "skipped": len(result["skipped"]),
+                        "results": [result],
+                    }
+                    st.success(
+                        f"Saved: {', '.join(result['saved']) or 'none'} · "
+                        f"review: {len(result['review'])}"
+                    )
+                except Exception as exc:
+                    st.error(f"Download failed: {exc}")
 
 with students_tab:
     rows = read_students(config.SPREADSHEET)
@@ -120,6 +168,17 @@ with students_tab:
         )
     else:
         st.info("Spreadsheet empty. Run the agent first.")
+
+    escalations = read_escalations()
+    if escalations:
+        st.subheader("Handed to a person")
+        st.dataframe(escalations, use_container_width=True, hide_index=True)
+        st.download_button(
+            "⬇ Download escalations.csv",
+            data=config.ESCALATIONS.read_bytes(),
+            file_name="escalations.csv",
+            mime="text/csv",
+        )
 
     files = list(config.OUT_DIR.glob("*.*"))
     if files:
@@ -148,7 +207,10 @@ with ask_tab:
             except Exception as exc:
                 answer = f"ESCALATE: model unavailable ({exc})"
             if answer.startswith("ESCALATE"):
+                reason = answer.removeprefix("ESCALATE:").strip() or "not covered by the FAQ"
+                log_escalation(question, reason)
                 st.warning(answer)
+                st.info("Handed to a staff member. It now appears under Students → Handed to a person.")
             else:
                 st.write(answer)
             with st.expander("FAQ context used"):
