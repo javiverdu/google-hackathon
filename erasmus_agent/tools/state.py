@@ -16,7 +16,7 @@ from pathlib import Path, PurePosixPath
 
 from .. import config
 
-BUNDLE_FILES = ("students.xlsx", "escalations.csv")
+BUNDLE_FILES = ("students.xlsx", "escalations.csv", "processing_log.json")
 BUNDLE_DIRS = ("out", "review")
 MAX_BUNDLE_BYTES = 200 * 1024 * 1024
 

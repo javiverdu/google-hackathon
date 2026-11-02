@@ -26,6 +26,7 @@ def make_data_dir(tmp_path):
     (root / "review" / "foto_borrosa.jpg.reason.txt").write_text("confidence=0.31")
     (root / "students.xlsx").write_bytes(b"fake xlsx")
     (root / "escalations.csv").write_text("timestamp,question\n2026-11-02,Can I bring my dog?\n")
+    (root / "processing_log.json").write_text('{"email_01.eml": {"processed": true}}')
     (root / "inbox" / "email_01.eml").write_text("Subject: Hello\n\nbody")
     return root
 
@@ -48,6 +49,7 @@ def test_export_contains_generated_files_only(tmp_path):
 
     assert "students.xlsx" in names
     assert "escalations.csv" in names
+    assert "processing_log.json" in names
     assert "out/Garcia_Ana_LearningAgreement_2026-27.pdf" in names
     assert "review/foto_borrosa.jpg.reason.txt" in names
     assert "manifest.json" in names
@@ -66,13 +68,13 @@ def test_roundtrip_restores_everything_and_keeps_inbox(tmp_path):
     root = make_data_dir(tmp_path)
     bundle = export_state(root)
 
-    for name in ("students.xlsx", "escalations.csv"):
+    for name in ("students.xlsx", "escalations.csv", "processing_log.json"):
         (root / name).unlink()
     (root / "out" / "Garcia_Ana_LearningAgreement_2026-27.pdf").unlink()
 
     result = restore_state(bundle, root)
 
-    assert result["files"] == 5
+    assert result["files"] == 6
     assert (root / "out" / "Garcia_Ana_LearningAgreement_2026-27.pdf").read_bytes() == b"%PDF-1.4 out"
     assert (root / "review" / "foto_borrosa.jpg.reason.txt").read_text() == "confidence=0.31"
     assert (root / "students.xlsx").read_bytes() == b"fake xlsx"
@@ -132,10 +134,11 @@ def test_reset_keeps_inbox_and_dotfiles(tmp_path):
 
     result = reset_demo_data(root)
 
-    assert result["removed"] == 5
+    assert result["removed"] == 6
     assert list((root / "out").iterdir()) == [root / "out" / ".gitkeep"]
     assert list((root / "review").iterdir()) == []
     assert not (root / "students.xlsx").exists()
     assert not (root / "escalations.csv").exists()
+    assert not (root / "processing_log.json").exists()
     assert (root / "inbox" / "email_01.eml").exists()
     assert result["summary"]["documents"] == 0
