@@ -105,6 +105,12 @@ processing the inbox, reading students, file naming and FAQ answers.
    ```
 5. Deploy. You get a public `https://<name>.streamlit.app` URL.
 
+Streamlit Community Cloud redeploys on every push to the connected branch. If a
+change does not show up, use **Manage app → Reboot app**. The filesystem is
+ephemeral: `data/out`, `students.xlsx` and `escalations.csv` reset when the app
+reboots or sleeps, so press **Run agent** once before the demo. The sample inbox
+is committed, so there is always data to process.
+
 Alternative hosts: Hugging Face Spaces (Streamlit SDK) or Render. `adk web` stays
 local; the deployed app calls the same pipeline functions.
 

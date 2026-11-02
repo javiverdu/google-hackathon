@@ -57,14 +57,27 @@ with st.sidebar:
     if not (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")):
         st.warning("No GOOGLE_API_KEY detected. Add it in .env or Streamlit secrets.")
 
+def _visible_files(folder) -> list:
+    """Real documents only: no .gitkeep, no review reason sidecars."""
+    if not folder.exists():
+        return []
+    return [
+        path
+        for path in folder.iterdir()
+        if path.is_file() and not path.name.startswith(".") and not path.name.endswith(".reason.txt")
+    ]
+
+
 inbox_tab, students_tab, ask_tab = st.tabs(["📥 Inbox", "📊 Students", "💬 Ask"])
 
 with inbox_tab:
     emails = list(iter_inbox(config.INBOX_DIR))
+    saved_files = _visible_files(config.OUT_DIR)
+    review_files = _visible_files(config.REVIEW_DIR)
     col_a, col_b, col_c = st.columns(3)
     col_a.metric("Emails in inbox", len(emails))
-    col_b.metric("Documents saved", len(list(config.OUT_DIR.glob("*.*"))))
-    col_c.metric("Needs a human", len(list(config.REVIEW_DIR.glob("*.*"))))
+    col_b.metric("Documents saved", len(saved_files))
+    col_c.metric("Needs a human", len(review_files))
 
     if emails:
         st.dataframe(
@@ -77,13 +90,13 @@ with inbox_tab:
                 }
                 for meta in emails
             ],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
     else:
         st.info("No .eml files yet. Drop sample emails into `data/inbox/`.")
 
-    if st.button("▶ Run agent on inbox", type="primary", use_container_width=True):
+    if st.button("▶ Run agent on inbox", type="primary", width="stretch"):
         with st.spinner("Reading emails, classifying documents, filling the spreadsheet..."):
             try:
                 report = run_inbox(limit=int(limit), threshold=threshold)
@@ -103,7 +116,7 @@ with inbox_tab:
                 st.write("Saved:", ", ".join(item["saved"]) or "none")
                 st.write("Review:", ", ".join(item["review"]) or "none")
                 if item.get("documents"):
-                    st.dataframe(item["documents"], use_container_width=True, hide_index=True)
+                    st.dataframe(item["documents"], width="stretch", hide_index=True)
                 if item["skipped"]:
                     st.info("; ".join(item["skipped"]))
                 if item["errors"]:
@@ -157,7 +170,7 @@ with inbox_tab:
 with students_tab:
     rows = read_students(config.SPREADSHEET)
     if rows:
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, width="stretch", hide_index=True)
         buffer = io.BytesIO()
         buffer.write(config.SPREADSHEET.read_bytes())
         st.download_button(
@@ -172,7 +185,7 @@ with students_tab:
     escalations = read_escalations()
     if escalations:
         st.subheader("Handed to a person")
-        st.dataframe(escalations, use_container_width=True, hide_index=True)
+        st.dataframe(escalations, width="stretch", hide_index=True)
         st.download_button(
             "⬇ Download escalations.csv",
             data=config.ESCALATIONS.read_bytes(),
@@ -180,7 +193,7 @@ with students_tab:
             mime="text/csv",
         )
 
-    files = list(config.OUT_DIR.glob("*.*"))
+    files = _visible_files(config.OUT_DIR)
     if files:
         archive = io.BytesIO()
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
