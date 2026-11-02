@@ -53,6 +53,21 @@ def test_unsupported_attachment_goes_to_review(inbox, env):
     assert (env.review / "letter.docx").exists()
 
 
+def test_running_inbox_twice_does_not_duplicate_review(inbox, env, monkeypatch):
+    make_email(inbox / "blurry.eml", attachments=[{"filename": "foto_borrosa.jpg"}])
+    _patch_classifier(monkeypatch, env, make_info(confidence=0.2))
+
+    first = env.pipeline.run_inbox(inbox)
+    second = env.pipeline.run_inbox(inbox)
+
+    assert first["review"] == second["review"] == 1
+    review_docs = [
+        path for path in env.review.iterdir() if not path.name.endswith(".reason.txt")
+    ]
+    assert [path.name for path in review_docs] == ["foto_borrosa.jpg"]
+    assert len(read_students(env.xlsx)) == 1
+
+
 def test_classifier_exception_goes_to_review(inbox, env, monkeypatch):
     make_email(inbox / "scan.eml", attachments=[{"filename": "scan_0042.pdf"}])
     _patch_classifier(monkeypatch, env, RuntimeError("503 model overloaded"))

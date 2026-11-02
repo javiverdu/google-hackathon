@@ -218,10 +218,20 @@ with inbox_tab:
     emails = list(iter_inbox(config.INBOX_DIR))
     saved_files = _visible_files(config.OUT_DIR)
     review_files = _visible_files(config.REVIEW_DIR)
-    col_a, col_b, col_c = st.columns(3)
+    students = read_students(config.SPREADSHEET)
+    flagged = sum(
+        1 for row in students if str(row.get("Status", "")).strip() == "needs_review"
+    )
+    col_a, col_b, col_c, col_d = st.columns(4)
     col_a.metric("Emails in inbox", len(emails))
     col_b.metric("Documents saved", len(saved_files))
-    col_c.metric("Needs a human", len(review_files))
+    col_c.metric("Documents in review", len(review_files))
+    col_d.metric("Students flagged", flagged)
+    if review_files:
+        st.caption(
+            "Review counts files, not students: the spreadsheet keeps one row per "
+            "student, so several review files can belong to the same person."
+        )
 
     if emails:
         st.dataframe(

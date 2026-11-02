@@ -65,6 +65,14 @@ def move_to_review(
     target = target_dir / f"{stem}{suffix}"
     counter = 2
     while target.exists():
+        try:
+            same = target.read_bytes() == data
+        except OSError:
+            same = False
+        if same:
+            if reason:
+                target.with_suffix(target.suffix + ".reason.txt").write_text(reason, encoding="utf-8")
+            return target  # reprocessing the same email: keep one review copy
         target = target_dir / f"{stem}-{counter}{suffix}"
         counter += 1
     target.write_bytes(data)

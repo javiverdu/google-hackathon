@@ -17,7 +17,7 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 
 - [ ] 2.1 After a fresh reboot, Inbox shows `Emails in inbox: 10` (committed samples).
 - [ ] 2.2 Table lists 10 rows with subject, sender and attachment count.
-- [ ] 2.3 Counters show `Documents saved: 0` and `Needs a human: 0` (ephemeral filesystem).
+- [ ] 2.3 Four counters: `Emails in inbox: 10`, `Documents saved: 0`, `Documents in review: 0`, `Students flagged: 0`.
 
 ## 3. Email upload (P0)
 
@@ -43,6 +43,7 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 - [ ] 4.7 Set confidence threshold to 0.1 and run: more files saved, fewer in review.
 - [ ] 4.8 Set "Max emails per run" to 3: only 3 emails processed.
 - [ ] 4.9 Runtime under ~90 s for 10 emails; spinner visible.
+- [ ] 4.10 Run twice: review file count stays 2, no `-2` copies in `data/review/`.
 
 ## 5. Student form (P0)
 
@@ -95,10 +96,11 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 
 ## 10. UI counters and empty states (P1)
 
-- [ ] 10.1 After a run: `Documents saved: 8`, `Needs a human: 2` (ignores `.reason.txt` and `.gitkeep`).
-- [ ] 10.2 Fresh app, Students tab: "Spreadsheet empty. Run the agent first."
-- [ ] 10.3 Fresh app, Ask tab: questions still work.
-- [ ] 10.4 Every email expander opens/closes without layout break.
+- [ ] 10.1 After a run: `Documents saved: 8`, `Documents in review: 2`, `Students flagged: 2` (ignores `.reason.txt`).
+- [ ] 10.2 Counter caption explains that review counts files, not students.
+- [ ] 10.3 Fresh app, Students tab: "Spreadsheet empty. Run the agent first."
+- [ ] 10.4 Fresh app, Ask tab: questions still work.
+- [ ] 10.5 Every email expander opens/closes without layout break.
 
 ## 11. Ephemeral filesystem and concurrency (P1)
 
@@ -126,7 +128,7 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 ## 14. Automated regression (run before the demo)
 
 ```bash
-pytest -q                                                   # 111 offline tests
+pytest -q                                                   # 114 offline tests
 python scripts/check_inbox.py                               # inbox doctor
 python scripts/check_requirements.py                        # 15 must-have checks
 RUN_LLM_TESTS=1 pytest tests/test_llm_integration.py -v     # 4 live Gemini tests

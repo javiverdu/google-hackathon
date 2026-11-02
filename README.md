@@ -176,7 +176,7 @@ pytest
 ruff check .
 ```
 
-80 offline tests, no key needed. They cover the ugly cases:
+114 offline tests, no key needed. They cover the ugly cases:
 
 - empty, garbage and truncated `.eml` files
 - HTML-only emails, missing subject/sender, unicode and missing filenames

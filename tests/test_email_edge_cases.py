@@ -89,6 +89,19 @@ def test_review_collision_gets_counter(tmp_path):
     assert second.name == "scan-2.pdf"
 
 
+def test_review_same_content_is_not_duplicated(tmp_path):
+    review = tmp_path / "review"
+    first = move_to_review(b"same", "scan.pdf", review, reason="confidence=0.20")
+    second = move_to_review(b"same", "scan.pdf", review, reason="confidence=0.20")
+
+    assert second == first
+    assert [path.name for path in review.iterdir() if not path.name.endswith(".reason.txt")] == [
+        "scan.pdf"
+    ]
+    reason = review / "scan.pdf.reason.txt"
+    assert reason.read_text() == "confidence=0.20"
+
+
 def test_very_long_names_are_truncated(tmp_path):
     info = make_info(student_surname="Lopez " * 60, student_first_name="Ana " * 40)
     target = save_document(b"%PDF-1.4", "scan.pdf", info, tmp_path)

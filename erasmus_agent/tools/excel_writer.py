@@ -176,6 +176,9 @@ def upsert_student(
 
     expired = _expired_docs(documents, key, today)
     sheet.cell(row_index, 11, ", ".join(expired) or "-")
+    current_status = str(sheet.cell(row_index, 10).value or "")
+    if current_status == "needs_review" and status != "needs_review":
+        status = "needs_review"  # never hide a review item behind a later good document
     sheet.cell(row_index, 10, status)
 
     workbook.save(path)

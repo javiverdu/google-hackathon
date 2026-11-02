@@ -44,6 +44,14 @@ def test_excel_does_not_duplicate_same_document(tmp_path):
     assert row["Documents"].count("LearningAgreement") == 1
 
 
+def test_excel_keeps_review_status_when_a_good_document_arrives(tmp_path):
+    xlsx = tmp_path / "students.xlsx"
+    upsert_student(xlsx, make_info(confidence=0.2), status="needs_review")
+    upsert_student(xlsx, make_info(), saved_filename="Garcia_Ana_Insurance_2026-27.jpg")
+
+    assert read_students(xlsx)[0]["Status"] == "needs_review"
+
+
 def test_excel_missing_list_updates_when_document_arrives(tmp_path):
     xlsx = tmp_path / "students.xlsx"
     upsert_student(

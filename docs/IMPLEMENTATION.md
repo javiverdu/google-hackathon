@@ -152,6 +152,7 @@ Rules:
 | Non-http URL, HTML page, private host | clear warning in the UI, nothing saved |
 | 404 / 403 | friendly message, no crash |
 | Duplicate upload | detected by content hash comparison, ignored |
+| Same email processed twice | saved and review files are reused, no `-2` copies |
 | Excel locked or disk error | caught per attachment, reported as error |
 
 ## 8. Runtime and persistence
