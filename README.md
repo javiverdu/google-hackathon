@@ -82,6 +82,7 @@ data/out/                   renamed documents (gitignored)
 data/review/                uncertain documents (gitignored)
 data/students.xlsx          generated spreadsheet (gitignored)
 docs/PLAN.md | docs/PLAN.es.md  team plan (English / Spanish)
+docs/QA_CHECKLIST.md        web QA checklist for the deployed app
 faq.md                      demo FAQ
 ```
 
