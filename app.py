@@ -8,12 +8,16 @@ import zipfile
 import streamlit as st
 
 from erasmus_agent import config, llm
-from erasmus_agent.pipeline import process_url, run_inbox
-from erasmus_agent.tools.email_reader import iter_inbox
+from erasmus_agent.pipeline import process_email, process_url, run_inbox
+from erasmus_agent.tools.email_reader import iter_inbox, read_email
 from erasmus_agent.tools.escalation import log_escalation, read_escalations
 from erasmus_agent.tools.excel_writer import read_students
 from erasmus_agent.tools.faq import load_faq, search_faq
-from erasmus_agent.tools.inbox_store import compose_email, store_email_bytes
+from erasmus_agent.tools.inbox_store import (
+    compose_email,
+    store_email_bytes,
+    student_submission_email,
+)
 
 st.set_page_config(page_title="Erasmus DocFlow", page_icon="🎓", layout="wide")
 
@@ -72,7 +76,9 @@ def _visible_files(folder) -> list:
     ]
 
 
-inbox_tab, students_tab, ask_tab = st.tabs(["📥 Inbox", "📊 Students", "💬 Ask"])
+inbox_tab, form_tab, students_tab, ask_tab = st.tabs(
+    ["📥 Inbox", "📨 Student form", "📊 Students", "💬 Ask"]
+)
 
 with inbox_tab:
     with st.expander("📤 Send emails to the agent", expanded=True):
@@ -238,6 +244,96 @@ with inbox_tab:
                     )
                 except Exception as exc:
                     st.error(f"Download failed: {exc}")
+
+with form_tab:
+    st.subheader("Student document submission")
+    st.caption(
+        "Same as a student emailing the office: the form generates a normal `.eml` "
+        "and the agent processes it immediately."
+    )
+    with st.form("student_submission"):
+        col1, col2 = st.columns(2)
+        first = col1.text_input("First name", key="sf_first")
+        surname = col2.text_input("Surname", key="sf_surname")
+        email_addr = col1.text_input("Email", "student@example.com", key="sf_email")
+        semester = col2.selectbox("Semester", ["2026-27", "2027-28"], key="sf_semester")
+        host = st.text_input("Host university", key="sf_host")
+        doc_type = st.selectbox(
+            "Document type",
+            ["LearningAgreement", "Transcript", "Insurance", "CertificateOfArrival", "Other"],
+            key="sf_doc_type",
+        )
+        date1, date2, date3 = st.columns(3)
+        start = date1.date_input("Stay start", value=None, key="sf_start")
+        end = date2.date_input("Stay end", value=None, key="sf_end")
+        deadline = date3.date_input("Deadline", value=None, key="sf_deadline")
+        message = st.text_area("Message (optional)", key="sf_message")
+        submission = st.file_uploader(
+            "Document (PDF, JPG, PNG)",
+            type=["pdf", "jpg", "jpeg", "png"],
+            key="sf_file",
+        )
+        sent = st.form_submit_button("Send to agent", type="primary")
+
+    if sent:
+        if not first.strip() or not surname.strip():
+            st.error("First name and surname are required.")
+        elif submission is None and not message.strip():
+            st.error("Attach a document or write a question.")
+        elif submission is not None and submission.size > 15 * 1024 * 1024:
+            st.error("Document too large (max 15 MB).")
+        else:
+            attachment = (
+                {
+                    "filename": submission.name,
+                    "data": submission.getvalue(),
+                    "content_type": submission.type,
+                }
+                if submission is not None
+                else None
+            )
+            data = student_submission_email(
+                first_name=first.strip(),
+                surname=surname.strip(),
+                email=email_addr.strip(),
+                semester=semester,
+                host_university=host.strip(),
+                doc_type=doc_type,
+                start_date=start.isoformat() if start else "",
+                end_date=end.isoformat() if end else "",
+                deadline=deadline.isoformat() if deadline else "",
+                message=message.strip(),
+                attachment=attachment,
+            )
+            filename, _ = store_email_bytes(
+                f"form_{first}_{surname}.eml", data, config.INBOX_DIR
+            )
+            meta = read_email(config.INBOX_DIR / filename)
+
+            if meta["attachments"]:
+                with st.spinner("Classifying the document and updating the spreadsheet..."):
+                    result = process_email(meta, threshold=threshold)
+                if result["saved"]:
+                    st.success(f"Saved as {', '.join(result['saved'])}")
+                else:
+                    st.warning(
+                        "Sent to review, a staff member will check it. "
+                        + "; ".join(result["review"] + result["errors"])
+                    )
+            else:
+                context = "\n".join(str(row) for row in read_students(config.SPREADSHEET))
+                with st.spinner("Answering from the FAQ..."):
+                    try:
+                        answer = llm.answer_question(message, load_faq(), context)
+                    except Exception as exc:
+                        answer = f"ESCALATE: model unavailable ({exc})"
+                if answer.startswith("ESCALATE"):
+                    reason = answer.removeprefix("ESCALATE:").strip()
+                    log_escalation(message, reason, student=f"{first} {surname}")
+                    st.warning("Question handed to a staff member.")
+                else:
+                    st.success(answer)
+            st.caption(f"Stored as `{filename}`. Staff can see it in the Inbox tab.")
 
 with students_tab:
     rows = read_students(config.SPREADSHEET)

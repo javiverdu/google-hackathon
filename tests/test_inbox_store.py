@@ -5,7 +5,11 @@ from __future__ import annotations
 from email.message import EmailMessage
 
 from erasmus_agent.tools.email_reader import iter_inbox, read_email
-from erasmus_agent.tools.inbox_store import compose_email, store_email_bytes
+from erasmus_agent.tools.inbox_store import (
+    compose_email,
+    store_email_bytes,
+    student_submission_email,
+)
 
 
 def make_raw_email(subject: str = "Docs", body: str = "Hello") -> bytes:
@@ -78,3 +82,53 @@ def test_composed_email_is_read_by_iter_inbox(tmp_path):
     emails = list(iter_inbox(tmp_path))
     assert len(emails) == 1
     assert emails[0]["subject"] == "Deadline"
+
+
+def test_student_form_builds_structured_email(tmp_path):
+    data = student_submission_email(
+        first_name="Ana",
+        surname="Garcia",
+        email="ana@example.com",
+        semester="2026-27",
+        host_university="University of Bologna",
+        doc_type="LearningAgreement",
+        start_date="2026-09-01",
+        end_date="2027-02-28",
+        deadline="2026-10-15",
+        message="Here is my signed agreement.",
+        attachment={
+            "filename": "scan_0042.pdf",
+            "data": b"%PDF-1.4 fake",
+            "content_type": "application/pdf",
+        },
+    )
+    path = tmp_path / "form.eml"
+    path.write_bytes(data)
+    meta = read_email(path)
+
+    assert meta["subject"] == "LearningAgreement - Ana Garcia"
+    assert meta["sender"] == "ana@example.com"
+    assert "Student surname: Garcia" in meta["body"]
+    assert "Host university: University of Bologna" in meta["body"]
+    assert "Deadline: 2026-10-15" in meta["body"]
+    assert len(meta["attachments"]) == 1
+    assert meta["attachments"][0]["name"] == "scan_0042.pdf"
+
+
+def test_student_form_without_attachment_is_a_question(tmp_path):
+    data = student_submission_email(
+        first_name="Tomas",
+        surname="Ferreira",
+        email="tomas@example.com",
+        semester="2026-27",
+        host_university="University of Porto",
+        doc_type="Other",
+        message="When is the deadline?",
+    )
+    path = tmp_path / "question.eml"
+    path.write_bytes(data)
+    meta = read_email(path)
+
+    assert meta["attachments"] == []
+    assert "When is the deadline?" in meta["body"]
+    assert meta["subject"] == "Other - Tomas Ferreira"

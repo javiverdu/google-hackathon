@@ -124,7 +124,10 @@ the agent**.
   For several messages, use Google Takeout or save them one by one.
 - **Outlook (Windows):** drag the message to the desktop, or **File → Save As → .eml**.
 - **Apple Mail:** select the messages → **File → Save As → .eml**.
-- **No .eml?** Use **Write a test email**, attach a PDF/JPG and add it to the inbox.
+- **No .eml?** Use **Student form**: name, surname, email, semester, host
+  university, document type, dates and a PDF/JPG. The form builds a real `.eml`
+  and processes it immediately, exactly like an emailed document. If no file is
+  attached, the message is treated as a question and answered from the FAQ.
 
 Uploads are deduplicated by content, so pressing the button twice is safe. On
 Streamlit Community Cloud the filesystem is ephemeral: uploaded emails and
