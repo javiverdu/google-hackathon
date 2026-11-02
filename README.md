@@ -1,5 +1,7 @@
 # Erasmus DocFlow
 
+- Project made using Deepsek v4 flash (we didn't won)
+
 Messy Erasmus inbox in. Renamed documents, a clean spreadsheet and FAQ answers out.
 
 An agent for a university international office: it reads a folder of `.eml`
