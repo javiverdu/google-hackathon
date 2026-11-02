@@ -114,6 +114,25 @@ is committed, so there is always data to process.
 Alternative hosts: Hugging Face Spaces (Streamlit SDK) or Render. `adk web` stays
 local; the deployed app calls the same pipeline functions.
 
+## Send emails to the web app
+
+There is no mailbox address connected. The app reads `.eml` files, so you export
+the messages from your mail client and upload them in **Inbox → Send emails to
+the agent**.
+
+- **Gmail:** open the message → ⋮ → **Show original** → **Download Original** (`.eml`).
+  For several messages, use Google Takeout or save them one by one.
+- **Outlook (Windows):** drag the message to the desktop, or **File → Save As → .eml**.
+- **Apple Mail:** select the messages → **File → Save As → .eml**.
+- **No .eml?** Use **Write a test email**, attach a PDF/JPG and add it to the inbox.
+
+Uploads are deduplicated by content, so pressing the button twice is safe. On
+Streamlit Community Cloud the filesystem is ephemeral: uploaded emails and
+generated files disappear when the app reboots or sleeps. The 10 sample emails
+under `data/inbox/` are committed, so the demo always has data.
+
+A real Gmail mailbox (IMAP with an app password) is not implemented.
+
 ## Data flow
 
 ```

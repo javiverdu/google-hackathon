@@ -13,6 +13,7 @@ from erasmus_agent.tools.email_reader import iter_inbox
 from erasmus_agent.tools.escalation import log_escalation, read_escalations
 from erasmus_agent.tools.excel_writer import read_students
 from erasmus_agent.tools.faq import load_faq, search_faq
+from erasmus_agent.tools.inbox_store import compose_email, store_email_bytes
 
 st.set_page_config(page_title="Erasmus DocFlow", page_icon="🎓", layout="wide")
 
@@ -74,6 +75,74 @@ def _visible_files(folder) -> list:
 inbox_tab, students_tab, ask_tab = st.tabs(["📥 Inbox", "📊 Students", "💬 Ask"])
 
 with inbox_tab:
+    with st.expander("📤 Send emails to the agent", expanded=True):
+        st.caption(
+            "Upload one or more `.eml` files. Gmail: open the message → ⋮ → **Show original** → "
+            "**Download Original**. Outlook: drag the message to the desktop. "
+            "Apple Mail: **Save As** → `.eml`."
+        )
+        uploads = st.file_uploader(
+            "Drop .eml files here",
+            type=["eml"],
+            accept_multiple_files=True,
+            key="eml_uploader",
+        )
+        if uploads:
+            added: list[str] = []
+            duplicates: list[str] = []
+            too_big: list[str] = []
+            for upload in uploads:
+                data = upload.getvalue()
+                if len(data) > 20 * 1024 * 1024:
+                    too_big.append(upload.name)
+                    continue
+                name, created = store_email_bytes(upload.name, data, config.INBOX_DIR)
+                (added if created else duplicates).append(name)
+            if added:
+                st.success(f"Added {len(added)} email(s): {', '.join(added)}. Press Run below.")
+            if duplicates:
+                st.caption(f"Already in inbox: {', '.join(duplicates)}")
+            if too_big:
+                st.warning(f"Too large (max 20 MB): {', '.join(too_big)}")
+
+    with st.expander("✍ Or write a test email"):
+        with st.form("compose_email"):
+            subject = st.text_input("Subject", "My Learning Agreement")
+            sender = st.text_input("From", "student@example.com")
+            body = st.text_area("Body", "Hello, attached is my document.")
+            files = st.file_uploader(
+                "Attachments (PDF, JPG, PNG)",
+                type=["pdf", "jpg", "jpeg", "png"],
+                accept_multiple_files=True,
+                key="compose_files",
+            )
+            submitted = st.form_submit_button("Add to inbox")
+
+        if submitted:
+            attachments = []
+            oversized = []
+            for file in files or []:
+                if file.size > 15 * 1024 * 1024:
+                    oversized.append(file.name)
+                    continue
+                attachments.append(
+                    {
+                        "filename": file.name,
+                        "data": file.getvalue(),
+                        "content_type": file.type,
+                    }
+                )
+            data = compose_email(subject, sender, body, attachments)
+            filename, created = store_email_bytes(
+                f"web_{subject.lower().replace(' ', '_')}.eml", data, config.INBOX_DIR
+            )
+            if created:
+                st.success(f"Email added as {filename}. Press Run below.")
+            else:
+                st.caption(f"Identical email already in inbox as {filename}.")
+            if oversized:
+                st.warning(f"Attachments over 15 MB were skipped: {', '.join(oversized)}")
+
     emails = list(iter_inbox(config.INBOX_DIR))
     saved_files = _visible_files(config.OUT_DIR)
     review_files = _visible_files(config.REVIEW_DIR)
