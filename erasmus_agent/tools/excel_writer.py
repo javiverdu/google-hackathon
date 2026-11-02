@@ -90,6 +90,7 @@ def upsert_student(
     saved_filename: str = "",
     status: str = "ok",
     today: date | None = None,
+    force_status: bool = False,
 ) -> Path:
     """Insert or merge one document into the student's row."""
     path = Path(path)
@@ -177,7 +178,7 @@ def upsert_student(
     expired = _expired_docs(documents, key, today)
     sheet.cell(row_index, 11, ", ".join(expired) or "-")
     current_status = str(sheet.cell(row_index, 10).value or "")
-    if current_status == "needs_review" and status != "needs_review":
+    if not force_status and current_status == "needs_review" and status != "needs_review":
         status = "needs_review"  # never hide a review item behind a later good document
     sheet.cell(row_index, 10, status)
 
@@ -211,3 +212,28 @@ def read_documents(path: str | Path) -> list[dict]:
         return []
     headers = [str(cell or "") for cell in rows[0]]
     return [dict(zip(headers, row)) for row in rows[1:] if any(row)]
+
+
+def write_students(path: str | Path, rows: list[dict]) -> Path:
+    """Overwrite the Students sheet with these rows (same HEADERS order), used
+    by the editable grid in the Students tab. The Documents detail sheet, if
+    present, is left untouched."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if path.exists():
+        workbook = load_workbook(path)
+        if "Students" in workbook.sheetnames:
+            del workbook["Students"]
+        students = workbook.create_sheet("Students", 0)
+    else:
+        workbook = Workbook()
+        students = workbook.active
+        students.title = "Students"
+
+    students.append(HEADERS)
+    for row in rows:
+        students.append([row.get(header, "") for header in HEADERS])
+
+    workbook.save(path)
+    return path

@@ -10,6 +10,7 @@ from .schemas import DocType, DocumentInfo
 from .tools.email_reader import iter_inbox
 from .tools.excel_writer import upsert_student
 from .tools.file_saver import move_to_review, save_document
+from .tools.status_log import record_run
 from .tools.web_download import download_document
 
 
@@ -50,6 +51,8 @@ def _process_attachment(meta: dict, attachment: dict, threshold: float, result: 
             name,
             REVIEW_DIR,
             reason=f"confidence={info.confidence:.2f} type={info.doc_type.value} notes={info.notes}",
+            info=info,
+            source_email=meta.get("filename", ""),
         )
         result["review"].append(target.name)
         document.update(filename=target.name, status="review")
@@ -88,6 +91,13 @@ def process_email(meta: dict, threshold: float = CONFIDENCE_THRESHOLD) -> dict:
 
     if not meta.get("attachments"):
         result["skipped"].append("No attachments (question only)")
+        record_run(
+            source_email=meta.get("filename", ""),
+            subject=meta.get("subject", ""),
+            sender=meta.get("sender", ""),
+            attachments=0,
+            result=result,
+        )
         return result
 
     for attachment in meta["attachments"]:
@@ -96,6 +106,13 @@ def process_email(meta: dict, threshold: float = CONFIDENCE_THRESHOLD) -> dict:
         except Exception as exc:  # disk errors, corrupt payloads, Excel locked...
             result["errors"].append(f"{attachment.get('name', 'document')}: {exc}")
 
+    record_run(
+        source_email=meta.get("filename", ""),
+        subject=meta.get("subject", ""),
+        sender=meta.get("sender", ""),
+        attachments=len(meta.get("attachments") or []),
+        result=result,
+    )
     return result
 
 

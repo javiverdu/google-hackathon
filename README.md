@@ -33,7 +33,7 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env        # then paste your AI Studio key
-python scripts/make_sample_data.py   # optional: 10 fake emails
+python scripts/make_sample_data.py   # optional: 15 fake emails
 streamlit run app.py
 ```
 
@@ -74,7 +74,9 @@ erasmus_agent/
     escalation.py           questions handed to a person
     web_download.py         download a document from an http(s) page
     state.py                export, restore and reset the demo data bundle
-scripts/make_sample_data.py 10 fake emails + PDFs/JPGs
+    signature.py            typed signature PNG stamped onto a PDF
+    status_log.py           per-email New / Review / Processed status
+scripts/make_sample_data.py 15 fake emails + PDFs/JPGs
 scripts/check_inbox.py      validate a folder without calling Gemini
 scripts/check_requirements.py  audit must-have requirements on generated data
 tests/                      offline tests + optional live Gemini tests
@@ -134,10 +136,22 @@ the agent**.
 
 Uploads are deduplicated by content, so pressing the button twice is safe. On
 Streamlit Community Cloud the filesystem is ephemeral: uploaded emails and
-generated files disappear when the app reboots or sleeps. The 10 sample emails
+generated files disappear when the app reboots or sleeps. The 15 sample emails
 under `data/inbox/` are committed, so the demo always has data.
 
 A real Gmail mailbox (IMAP with an app password) is not implemented.
+
+## Review, signatures and the spreadsheet
+
+- **Review tab:** every uncertain document waits here with a preview, the model
+  guess and the reason it was flagged. Staff fix the fields and **Approve & save**
+  (renamed, filed, row updated) or **Discard** it.
+- **Signatures:** for a PDF in review, type a name or upload a signature image and
+  stamp it bottom-left, bottom-center or bottom-right. Images cannot be signed.
+- **Students tab:** an editable grid. Change any cell and press **Save changes**;
+  `students.xlsx` is rewritten (the `Documents` detail sheet is kept).
+- **Inbox status:** each email is grouped as New, Student questions, Needs review
+  or Processed, using `data/processing_log.json`.
 
 ## Data flow
 
@@ -176,7 +190,7 @@ pytest
 ruff check .
 ```
 
-114 offline tests, no key needed. They cover the ugly cases:
+125 offline tests, no key needed. They cover the ugly cases:
 
 - empty, garbage and truncated `.eml` files
 - HTML-only emails, missing subject/sender, unicode and missing filenames
@@ -231,6 +245,7 @@ key stay green.
 - Download documents from a web page with the same naming rules (Inbox → URL box)
 - Public Streamlit deployment (see above); `adk web` for the ADK agent locally
 - Save/restore the demo state as a `.zip` and reset generated files (sidebar → **Demo data**)
+- Human review queue with approve/discard, PDF signature stamping and an editable student grid
 
 Not implemented: real Gmail mailbox, login, persistent database.
 
@@ -241,7 +256,7 @@ The container filesystem is ephemeral. Before the demo:
 1. Sidebar → **Demo data → Prepare state bundle** → **Download state (.zip)**.
 2. After a reboot, upload the same bundle and press **Restore state**.
 3. **Reset demo data** clears the spreadsheet, documents, review files and
-   escalations but keeps the ten sample emails in `data/inbox/`.
+   escalations but keeps the fifteen sample emails in `data/inbox/`.
 
 The public URL has no login: every visitor shares the same files. Do not upload
 real student data.

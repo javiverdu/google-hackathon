@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 import erasmus_agent.pipeline as pipeline
+import erasmus_agent.tools.status_log as status_log
 
 
 @pytest.fixture
@@ -24,4 +25,5 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "OUT_DIR", out)
     monkeypatch.setattr(pipeline, "REVIEW_DIR", review)
     monkeypatch.setattr(pipeline, "SPREADSHEET", xlsx)
+    monkeypatch.setattr(status_log, "LOG_PATH", tmp_path / "processing_log.json")
     return SimpleNamespace(out=out, review=review, xlsx=xlsx, pipeline=pipeline)

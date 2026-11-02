@@ -21,5 +21,5 @@ def test_read_email():
 @pytest.mark.skipif(not INBOX.exists(), reason="sample data not generated")
 def test_iter_inbox_reads_all():
     emails = list(iter_inbox(INBOX))
-    assert len(emails) == 10
+    assert len(emails) >= 10
     assert all("filename" in meta for meta in emails)

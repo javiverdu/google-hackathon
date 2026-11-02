@@ -2,23 +2,30 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import zipfile
+from pathlib import Path
 
 import streamlit as st
 
 from erasmus_agent import config, llm
 from erasmus_agent.pipeline import process_email, process_url, run_inbox
+from erasmus_agent.schemas import DocType, DocumentInfo
 from erasmus_agent.tools.email_reader import iter_inbox, read_email
 from erasmus_agent.tools.escalation import log_escalation, read_escalations
-from erasmus_agent.tools.excel_writer import read_students
+from erasmus_agent.tools.excel_writer import read_students, upsert_student, write_students
 from erasmus_agent.tools.faq import load_faq, search_faq
-from erasmus_agent.tools.inbox_store import (
-    compose_email,
-    store_email_bytes,
-    student_submission_email,
+from erasmus_agent.tools.file_saver import (
+    approve_review_item,
+    discard_review_item,
+    list_review_items,
+    read_review_sidecar,
 )
+from erasmus_agent.tools.inbox_store import compose_email, store_email_bytes, student_submission_email
+from erasmus_agent.tools.signature import render_typed_signature, stamp_signature_on_pdf
 from erasmus_agent.tools.state import export_state, reset_demo_data, restore_state, state_summary
+from erasmus_agent.tools.status_log import read_log, resolve_review_item, status_for
 from erasmus_agent.tools.web_download import DownloadError
 
 st.set_page_config(page_title="Erasmus DocFlow", page_icon="🎓", layout="wide")
@@ -131,19 +138,48 @@ with st.sidebar:
     flash = st.session_state.pop("state_flash", None)
     if flash:
         st.success(flash)
+
+
 def _visible_files(folder) -> list:
-    """Real documents only: no .gitkeep, no review reason sidecars."""
+    """Real documents only: no dotfiles, no review sidecars."""
     if not folder.exists():
         return []
     return [
         path
         for path in folder.iterdir()
-        if path.is_file() and not path.name.startswith(".") and not path.name.endswith(".reason.txt")
+        if path.is_file()
+        and not path.name.startswith(".")
+        and not path.name.endswith(".reason.txt")
+        and path.suffix != ".json"
     ]
 
 
-inbox_tab, form_tab, students_tab, ask_tab = st.tabs(
-    ["📥 Inbox", "📨 Student form", "📊 Students", "💬 Ask"]
+def render_attachment_preview(name: str, data: bytes) -> None:
+    """Reusable inline preview for a PDF/image, used by Inbox and Review tabs."""
+    suffix = Path(name).suffix.lower()
+    if suffix == ".pdf":
+        b64 = base64.b64encode(data).decode()
+        st.markdown(
+            f'<embed src="data:application/pdf;base64,{b64}" '
+            'width="100%" height="500" type="application/pdf">',
+            unsafe_allow_html=True,
+        )
+    elif suffix in (".jpg", ".jpeg", ".png", ".webp"):
+        st.image(data, width="stretch")
+    else:
+        st.info(f"No preview available for {suffix or 'this'} files.")
+        st.download_button("⬇ Download to view", data=data, file_name=name, key=f"dl_{name}")
+
+
+STATUS_LABELS = {
+    "needs_review": "⚠️ Needs review",
+    "question": "❓ Student questions",
+    "new": "🆕 New / not processed yet",
+    "processed": "✅ Processed",
+}
+
+inbox_tab, review_tab, form_tab, students_tab, ask_tab = st.tabs(
+    ["📥 Inbox", "🔍 Review", "📨 Student form", "📊 Students", "💬 Ask"]
 )
 
 with inbox_tab:
@@ -216,89 +252,105 @@ with inbox_tab:
                 st.warning(f"Attachments over 15 MB were skipped: {', '.join(oversized)}")
 
     emails = list(iter_inbox(config.INBOX_DIR))
-    saved_files = _visible_files(config.OUT_DIR)
-    review_files = _visible_files(config.REVIEW_DIR)
+    review_items = list_review_items(config.REVIEW_DIR)
+    log = read_log()
     students = read_students(config.SPREADSHEET)
     flagged = sum(
         1 for row in students if str(row.get("Status", "")).strip() == "needs_review"
     )
+
     col_a, col_b, col_c, col_d = st.columns(4)
     col_a.metric("Emails in inbox", len(emails))
-    col_b.metric("Documents saved", len(saved_files))
-    col_c.metric("Documents in review", len(review_files))
+    col_b.metric("Documents saved", len(_visible_files(config.OUT_DIR)))
+    col_c.metric("Documents in review", len(review_items))
     col_d.metric("Students flagged", flagged)
-    if review_files:
+    if review_items:
         st.caption(
             "Review counts files, not students: the spreadsheet keeps one row per "
             "student, so several review files can belong to the same person."
         )
 
-    if emails:
-        st.dataframe(
-            [
-                {
-                    "Email": meta["filename"],
-                    "Subject": meta["subject"],
-                    "From": meta["sender"],
-                    "Attachments": len(meta["attachments"]),
-                }
-                for meta in emails
-            ],
-            width="stretch",
-            hide_index=True,
-        )
-    else:
-        st.info("No .eml files yet. Drop sample emails into `data/inbox/`.")
-
     if st.button("▶ Run agent on inbox", type="primary", width="stretch"):
         with st.spinner("Reading emails, classifying documents, filling the spreadsheet..."):
             try:
                 report = run_inbox(limit=int(limit), threshold=threshold)
-                st.session_state["report"] = report
                 st.success(
                     f"{report['emails']} emails · {report['saved']} documents saved · "
                     f"{report['review']} sent to review · {report['errors']} errors · "
                     f"{report['skipped']} without attachments"
                 )
+                st.rerun()
             except Exception as exc:
                 st.error(f"Run failed: {exc}")
 
-    report = st.session_state.get("report")
-    if report:
-        for item in report["results"]:
-            with st.expander(f"{item['email']} — {item['subject'] or 'no subject'}"):
-                st.write("Saved:", ", ".join(item["saved"]) or "none")
-                st.write("Review:", ", ".join(item["review"]) or "none")
-                if item.get("documents"):
-                    st.dataframe(item["documents"], width="stretch", hide_index=True)
-                if item["skipped"]:
-                    st.info("; ".join(item["skipped"]))
-                if item["errors"]:
-                    st.warning("; ".join(item["errors"]))
+    if not emails:
+        st.info("No .eml files yet. Drop sample emails into `data/inbox/`.")
+    else:
+        groups: dict[str, list[dict]] = {key: [] for key in STATUS_LABELS}
+        for meta in emails:
+            entry = log.get(meta["filename"])
+            status = status_for(entry, has_attachments=bool(meta["attachments"]))
+            groups[status].append({"meta": meta, "entry": entry})
 
-                saved = [doc for doc in item.get("documents", []) if doc["status"] == "saved"]
-                if saved:
-                    key = f"draft_{item['email']}"
-                    if st.button("✉ Draft reply for staff review", key=f"btn_{item['email']}"):
-                        summary = "Documents received: " + ", ".join(
-                            f"{doc['doc_type']} ({doc['filename']})" for doc in saved
-                        )
-                        try:
-                            st.session_state[key] = llm.draft_reply(
-                                saved[0]["student"], item["subject"], summary, load_faq()
+        for status, label in STATUS_LABELS.items():
+            items = groups[status]
+            if not items:
+                continue
+            st.subheader(f"{label} ({len(items)})")
+            for item in items:
+                meta, entry = item["meta"], item["entry"]
+                header = f"{meta['subject'] or '(no subject)'} — {meta['sender']}"
+                with st.expander(header):
+                    st.write(meta["body"] or "_(no text in the email)_")
+
+                    if entry and entry.get("errors"):
+                        for err in entry["errors"]:
+                            st.warning(err)
+
+                    if not meta["attachments"]:
+                        st.caption("No attachments on this email.")
+                    for attachment in meta["attachments"]:
+                        att_name = attachment.get("name", "document")
+                        tag = ""
+                        if entry:
+                            if att_name in (entry.get("review") or []):
+                                tag = " · ⚠️ needs review"
+                            elif any(att_name.split(".")[0] in s for s in entry.get("saved") or []):
+                                tag = " · ✅ saved"
+                        with st.expander(f"📎 {att_name}{tag}"):
+                            render_attachment_preview(att_name, attachment["data"])
+                            if tag.endswith("needs review"):
+                                st.caption("Fix this in the 🔍 Review tab to approve or discard it.")
+
+                    saved_docs = (
+                        [doc for doc in entry.get("documents", []) if doc.get("status") == "saved"]
+                        if entry
+                        else []
+                    )
+                    if saved_docs:
+                        draft_key = f"draft_{meta['filename']}"
+                        if st.button("✉ Draft reply for staff review", key=f"btn_{meta['filename']}"):
+                            doc_summary = "Documents received: " + ", ".join(
+                                f"{doc['doc_type']} ({doc['filename']})" for doc in saved_docs
                             )
-                        except Exception as exc:
-                            st.warning(f"Draft failed: {exc}")
-                    draft = st.session_state.get(key)
-                    if draft:
-                        st.text_area("Draft — staff checks and sends", draft, height=180, key=f"area_{key}")
-                        st.download_button(
-                            "⬇ Download draft (.txt)",
-                            data=draft.encode("utf-8"),
-                            file_name=f"reply_{item['email']}.txt",
-                            mime="text/plain",
-                            key=f"dl_{key}",
-                        )
+                            try:
+                                st.session_state[draft_key] = llm.draft_reply(
+                                    saved_docs[0]["student"], meta["subject"], doc_summary, load_faq()
+                                )
+                            except Exception as exc:
+                                st.warning(f"Draft failed: {exc}")
+                        draft = st.session_state.get(draft_key)
+                        if draft:
+                            st.text_area(
+                                "Draft — staff checks and sends", draft, height=180, key=f"area_{draft_key}"
+                            )
+                            st.download_button(
+                                "⬇ Download draft (.txt)",
+                                data=draft.encode("utf-8"),
+                                file_name=f"reply_{meta['filename']}.txt",
+                                mime="text/plain",
+                                key=f"dl_{draft_key}",
+                            )
 
     with st.expander("🌐 Download a document from a web page (optional)"):
         st.caption(
@@ -316,18 +368,11 @@ with inbox_tab:
             with st.spinner("Downloading and classifying..."):
                 try:
                     result = process_url(url, threshold=threshold)
-                    st.session_state["report"] = {
-                        "emails": 1,
-                        "saved": len(result["saved"]),
-                        "review": len(result["review"]),
-                        "errors": len(result["errors"]),
-                        "skipped": len(result["skipped"]),
-                        "results": [result],
-                    }
                     st.success(
                         f"Saved: {', '.join(result['saved']) or 'none'} · "
                         f"review: {len(result['review'])}"
                     )
+                    st.rerun()
                 except DownloadError as exc:
                     if exc.kind in {"html", "scheme", "not_found", "auth"}:
                         st.warning(str(exc))
@@ -335,6 +380,141 @@ with inbox_tab:
                         st.error(str(exc))
                 except Exception as exc:  # noqa: BLE001 - last resort, keep the UI alive
                     st.error(f"Download failed: {exc}")
+
+with review_tab:
+    st.caption(
+        "Documents the agent was not sure about. Check the preview, fix the fields, "
+        "then approve — it gets renamed, filed and added to the spreadsheet."
+    )
+    items = list_review_items(config.REVIEW_DIR)
+
+    if not items:
+        st.success("Nothing waiting for review. 🎉")
+    else:
+        names = [path.name for path in items]
+        choice = st.selectbox(f"{len(items)} document(s) need a human", names)
+        selected = items[names.index(choice)]
+        sidecar = read_review_sidecar(selected)
+        extracted = sidecar.get("extracted") or {}
+
+        preview_col, form_col = st.columns([3, 2])
+
+        with preview_col:
+            if sidecar.get("reason"):
+                st.warning(f"Why it was flagged: {sidecar['reason']}")
+            if sidecar.get("source_email"):
+                st.caption(f"From email: {sidecar['source_email']}")
+
+            render_attachment_preview(selected.name, selected.read_bytes())
+
+            if selected.suffix.lower() == ".pdf":
+                with st.expander("✍️ Add a signature"):
+                    position = st.selectbox(
+                        "Position on the page",
+                        ["Bottom-right", "Bottom-left", "Bottom-center"],
+                        key=f"sig_pos_{selected.name}",
+                    )
+                    mode = st.radio(
+                        "Signature source",
+                        ["Type a name", "Upload an image"],
+                        horizontal=True,
+                        key=f"sig_mode_{selected.name}",
+                    )
+
+                    signature_png = None
+                    if mode == "Type a name":
+                        typed = st.text_input(
+                            "Full name to render as a signature",
+                            value=(
+                                f"{extracted.get('student_first_name', '')} "
+                                f"{extracted.get('student_surname', '')}"
+                            ).strip(),
+                            key=f"sig_name_{selected.name}",
+                        )
+                        if typed.strip():
+                            signature_png = render_typed_signature(typed)
+                            st.image(signature_png, caption="Preview")
+                    else:
+                        uploaded = st.file_uploader(
+                            "Signature image (PNG with transparent background works best)",
+                            type=["png", "jpg", "jpeg"],
+                            key=f"sig_upload_{selected.name}",
+                        )
+                        if uploaded is not None:
+                            signature_png = uploaded.getvalue()
+                            st.image(signature_png, caption="Preview")
+
+                    if st.button(
+                        "Stamp signature onto this document",
+                        disabled=signature_png is None,
+                        key=f"sig_stamp_{selected.name}",
+                    ):
+                        signed_bytes = stamp_signature_on_pdf(
+                            selected.read_bytes(),
+                            signature_png,
+                            position=position.lower().replace(" ", "-"),
+                        )
+                        selected.write_bytes(signed_bytes)
+                        st.success("Signed. The preview above now shows the signed copy.")
+                        st.rerun()
+
+        with form_col:
+            with st.form(key=f"review_form_{selected.name}"):
+                first_name = st.text_input("First name", extracted.get("student_first_name", ""))
+                surname = st.text_input("Surname", extracted.get("student_surname", ""))
+                doc_type = st.selectbox(
+                    "Document type",
+                    [d.value for d in DocType],
+                    index=[d.value for d in DocType].index(
+                        extracted.get("doc_type", DocType.other.value)
+                    )
+                    if extracted.get("doc_type") in [d.value for d in DocType]
+                    else len(DocType) - 1,
+                )
+                semester = st.text_input("Semester", extracted.get("semester", config.SEMESTER))
+                host_university = st.text_input("Host university", extracted.get("host_university", ""))
+                start_date = st.text_input("Start date (YYYY-MM-DD)", extracted.get("start_date", ""))
+                end_date = st.text_input("End date (YYYY-MM-DD)", extracted.get("end_date", ""))
+                deadline = st.text_input("Deadline (YYYY-MM-DD)", extracted.get("deadline", ""))
+
+                approve = st.form_submit_button("✅ Approve & save", type="primary", width="stretch")
+                discard = st.form_submit_button("🗑 Discard (not a real document)", width="stretch")
+
+            if approve:
+                if not surname.strip():
+                    st.error("Surname is required before approving.")
+                else:
+                    info = DocumentInfo(
+                        student_first_name=first_name.strip(),
+                        student_surname=surname.strip(),
+                        doc_type=DocType(doc_type),
+                        semester=semester.strip(),
+                        host_university=host_university.strip(),
+                        start_date=start_date.strip(),
+                        end_date=end_date.strip(),
+                        deadline=deadline.strip(),
+                        confidence=1.0,
+                        notes="Confirmed by staff",
+                    )
+                    target = approve_review_item(selected, info, config.OUT_DIR)
+                    upsert_student(
+                        config.SPREADSHEET,
+                        info,
+                        saved_filename=target.name,
+                        status="ok",
+                        force_status=True,
+                    )
+                    if sidecar.get("source_email"):
+                        resolve_review_item(sidecar["source_email"], selected.name, target.name)
+                    st.success(f"Saved as {target.name} and added to students.xlsx")
+                    st.rerun()
+
+            if discard:
+                if sidecar.get("source_email"):
+                    resolve_review_item(sidecar["source_email"], selected.name, None)
+                discard_review_item(selected)
+                st.info(f"Discarded {selected.name}")
+                st.rerun()
 
 with form_tab:
     st.subheader("Student document submission")
@@ -429,15 +609,31 @@ with form_tab:
 with students_tab:
     rows = read_students(config.SPREADSHEET)
     if rows:
-        st.dataframe(rows, width="stretch", hide_index=True)
-        buffer = io.BytesIO()
-        buffer.write(config.SPREADSHEET.read_bytes())
-        st.download_button(
-            "⬇ Download students.xlsx",
-            data=buffer.getvalue(),
-            file_name="students.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        st.caption("Edit any cell directly, then save. Changes go straight into students.xlsx.")
+        edited = st.data_editor(
+            rows,
+            width="stretch",
+            hide_index=True,
+            num_rows="dynamic",
+            key="students_editor",
         )
+
+        save_col, download_col = st.columns([1, 1])
+        with save_col:
+            if st.button("💾 Save changes", type="primary", width="stretch"):
+                write_students(config.SPREADSHEET, edited)
+                st.success("students.xlsx updated.")
+                st.rerun()
+        with download_col:
+            buffer = io.BytesIO()
+            buffer.write(config.SPREADSHEET.read_bytes())
+            st.download_button(
+                "⬇ Download students.xlsx",
+                data=buffer.getvalue(),
+                file_name="students.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                width="stretch",
+            )
     else:
         st.info("Spreadsheet empty. Run the agent first.")
 

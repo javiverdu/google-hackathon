@@ -1,0 +1,22 @@
+From: Priya Nair <student@example.com>
+To: erasmus@example.edu
+Subject: transcript
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="===============0545198181100374566=="
+
+--===============0545198181100374566==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hi, here is my transcript, let me know if you can't open it.
+
+--===============0545198181100374566==
+Content-Type: application/pdf
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="transcript_broken.pdf"
+MIME-Version: 1.0
+
+JVBERi0xLjQgVEhJUyBGSUxFIElTIElOVEVOVElPTkFMTFkgQ09SUlVQVEVEIEFORCBOT1QgQSBS
+RUFMIFBERg==
+
+--===============0545198181100374566==--

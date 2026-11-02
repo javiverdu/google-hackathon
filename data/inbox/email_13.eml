@@ -1,0 +1,21 @@
+From: Yuki Tanaka <student@example.com>
+To: erasmus@example.edu
+Subject: Learning Agreement attached
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="===============5082513832886728665=="
+
+--===============5082513832886728665==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hello, please find attached my Learning Agreement in Word format.
+
+--===============5082513832886728665==
+Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="learning_agreement.docx"
+MIME-Version: 1.0
+
+UEsDBCAobm90IGEgcmVhbCBkb2N4LCBqdXN0IGJ5dGVzIGZvciB0aGUgZGVtbyk=
+
+--===============5082513832886728665==--

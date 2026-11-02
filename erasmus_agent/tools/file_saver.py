@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -49,13 +50,23 @@ def save_document(
     return target
 
 
+def _sidecar_path(target: Path) -> Path:
+    return target.with_suffix(target.suffix + ".json")
+
+
 def move_to_review(
     data: bytes,
     original_name: str,
     review_dir: str | Path,
     reason: str = "",
+    info: DocumentInfo | None = None,
+    source_email: str = "",
 ) -> Path:
-    """Store uncertain documents for a human, keeping a cleaned original name."""
+    """Store uncertain documents for a human, keeping a cleaned original name.
+
+    Writes a .json sidecar with the reason and whatever the model guessed
+    (even if wrong), so the review UI can pre-fill a correction form.
+    """
     target_dir = Path(review_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
     stem = _sanitize_stem(Path(original_name).stem)
@@ -76,6 +87,61 @@ def move_to_review(
         target = target_dir / f"{stem}-{counter}{suffix}"
         counter += 1
     target.write_bytes(data)
+    _sidecar_path(target).write_text(
+        json.dumps(
+            {
+                "reason": reason,
+                "source_email": source_email,
+                "original_name": original_name,
+                "extracted": info.model_dump(mode="json") if info else {},
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     if reason:
         target.with_suffix(target.suffix + ".reason.txt").write_text(reason, encoding="utf-8")
+    return target
+
+
+def read_review_sidecar(path: str | Path) -> dict:
+    """Read the .json sidecar for a review-folder document, if any."""
+    sidecar = _sidecar_path(Path(path))
+    if not sidecar.exists():
+        return {}
+    return json.loads(sidecar.read_text(encoding="utf-8"))
+
+
+def list_review_items(review_dir: str | Path) -> list[Path]:
+    """Every document currently waiting for a human in the review folder."""
+    folder = Path(review_dir)
+    if not folder.is_dir():
+        return []
+    return sorted(
+        path
+        for path in folder.iterdir()
+        if path.is_file()
+        and path.suffix != ".json"
+        and not path.name.endswith(".reason.txt")
+        and path.name != ".gitkeep"
+    )
+
+
+def discard_review_item(path: str | Path) -> None:
+    """Remove a review document and its sidecars without saving it anywhere."""
+    path = Path(path)
+    _sidecar_path(path).unlink(missing_ok=True)
+    path.with_suffix(path.suffix + ".reason.txt").unlink(missing_ok=True)
+    path.unlink(missing_ok=True)
+
+
+def approve_review_item(
+    path: str | Path,
+    info: DocumentInfo,
+    out_dir: str | Path,
+) -> Path:
+    """Human confirmed/corrected the fields: save properly and clear the review entry."""
+    path = Path(path)
+    target = save_document(path.read_bytes(), path.name, info, out_dir)
+    discard_review_item(path)
     return target

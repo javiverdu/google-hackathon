@@ -62,7 +62,9 @@ def test_running_inbox_twice_does_not_duplicate_review(inbox, env, monkeypatch):
 
     assert first["review"] == second["review"] == 1
     review_docs = [
-        path for path in env.review.iterdir() if not path.name.endswith(".reason.txt")
+        path
+        for path in env.review.iterdir()
+        if not path.name.endswith(".reason.txt") and path.suffix != ".json"
     ]
     assert [path.name for path in review_docs] == ["foto_borrosa.jpg"]
     assert len(read_students(env.xlsx)) == 1

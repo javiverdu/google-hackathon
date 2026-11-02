@@ -95,9 +95,12 @@ def test_review_same_content_is_not_duplicated(tmp_path):
     second = move_to_review(b"same", "scan.pdf", review, reason="confidence=0.20")
 
     assert second == first
-    assert [path.name for path in review.iterdir() if not path.name.endswith(".reason.txt")] == [
-        "scan.pdf"
+    kept = [
+        path.name
+        for path in review.iterdir()
+        if not path.name.endswith(".reason.txt") and path.suffix != ".json"
     ]
+    assert kept == ["scan.pdf"]
     reason = review / "scan.pdf.reason.txt"
     assert reason.read_text() == "confidence=0.20"
 

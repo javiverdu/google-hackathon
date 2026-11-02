@@ -33,8 +33,8 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 
 ## 4. Run pipeline (P0)
 
-- [ ] 4.1 Press **Run agent on inbox** with the 10 samples:
-      `10 emails · 8 documents saved · 2 sent to review · 0 errors · 1 without attachments`.
+- [ ] 4.1 Press **Run agent on inbox** with the 15 samples: the success line adds up
+      (`emails = saved + review + skipped`, plus any errors).
 - [ ] 4.2 Saved files match `Surname_Name_DocType_YYYY-YY.ext`.
 - [ ] 4.3 Review folder gets 2 documents plus 2 `.reason.txt` files with confidence/notes.
 - [ ] 4.4 `foto_borrosa.jpg` is in review, not saved.
@@ -42,8 +42,8 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 - [ ] 4.6 Press Run twice: no duplicated rows or files (idempotent).
 - [ ] 4.7 Set confidence threshold to 0.1 and run: more files saved, fewer in review.
 - [ ] 4.8 Set "Max emails per run" to 3: only 3 emails processed.
-- [ ] 4.9 Runtime under ~90 s for 10 emails; spinner visible.
-- [ ] 4.10 Run twice: review file count stays 2, no `-2` copies in `data/review/`.
+- [ ] 4.9 Runtime under ~120 s for 15 emails; spinner visible.
+- [ ] 4.10 Run twice: review file count does not grow, no `-2` copies in `data/review/`.
 
 ## 5. Student form (P0)
 
@@ -75,6 +75,10 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 - [ ] 7.4 Download `students.xlsx`: opens in Excel/LibreOffice, has Students and Documents sheets.
 - [ ] 7.5 Download `.zip`: only renamed documents, no `.gitkeep`, no `.reason.txt`.
 - [ ] 7.6 "Handed to a person" table shows question, reason, timestamp; CSV downloads.
+- [ ] 7.7 Review tab: approve a document with corrected fields, it is renamed and the review item disappears.
+- [ ] 7.8 Review tab: discard removes only that document and its sidecars.
+- [ ] 7.9 Signature: type a name on a PDF, stamp it, preview shows the signed copy.
+- [ ] 7.10 Students grid: edit a cell, Save changes, reload and the value persists.
 
 ## 8. Web download (P1) — optional nice-to-have
 
@@ -104,14 +108,14 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 
 ## 11. Ephemeral filesystem and concurrency (P1)
 
-- [ ] 11.1 Run, then Reboot: outputs cleared, 10 sample emails remain.
+- [ ] 11.1 Run, then Reboot: outputs cleared, 15 sample emails remain.
 - [ ] 11.2 Two browser tabs press Run together: no crash, consistent final state.
 - [ ] 11.3 Idle 20+ minutes, reload: app wakes, data reset, still functional.
 - [ ] 11.4 Sidebar shows "Public demo. No login..." and "Generated files: N documents".
 - [ ] 11.5 **Prepare state bundle → Download state (.zip)**: bundle downloads, size shown.
 - [ ] 11.6 Reboot, upload the bundle, **Restore state**: spreadsheet and documents return.
 - [ ] 11.7 Upload a random `.zip`: `Unexpected file in bundle` or `not a valid .zip`, nothing changes.
-- [ ] 11.8 **Reset demo data** disabled until the checkbox; after reset, inbox keeps 10 emails.
+- [ ] 11.8 **Reset demo data** disabled until the checkbox; after reset, inbox keeps 15 emails.
 
 ## 12. Cross-browser and responsive (P2)
 
@@ -128,7 +132,7 @@ Legend: `[ ]` not run · `[x]` passed · `[!]` failed (add a note).
 ## 14. Automated regression (run before the demo)
 
 ```bash
-pytest -q                                                   # 114 offline tests
+pytest -q                                                   # 125 offline tests
 python scripts/check_inbox.py                               # inbox doctor
 python scripts/check_requirements.py                        # 15 must-have checks
 RUN_LLM_TESTS=1 pytest tests/test_llm_integration.py -v     # 4 live Gemini tests

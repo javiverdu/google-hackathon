@@ -13,7 +13,8 @@ The Erasmus office receives messy student emails with scanned documents
 3. renames the file with a stable pattern,
 4. writes one row per student in `students.xlsx`,
 5. answers FAQ questions or hands them to a person,
-6. lists missing and expired documents.
+6. lists missing and expired documents,
+7. lets a human approve, discard or sign review items in the UI.
 
 ## 2. Architecture
 
@@ -110,6 +111,8 @@ item and shown in the report.
 | `tools/escalation.py` | Append-only CSV of questions for humans |
 | `tools/web_download.py` | Direct http(s) file download, HTML and private-host rejection |
 | `tools/state.py` | Export, restore and reset the demo data bundle |
+| `tools/signature.py` | Typed signature PNG, stamped on a PDF page with pypdf/reportlab |
+| `tools/status_log.py` | Per-email status: new, question, processed, needs review |
 | `erasmus_agent/agent.py` | ADK agent exposing the same tools to `adk web` |
 
 ## 5. Naming rule
